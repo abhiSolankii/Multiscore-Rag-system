@@ -21,6 +21,8 @@ async def generate_rag_response(
     conversation_history: List[Dict[str, str]],
     user_id: str,
     include_public: bool = False,
+    mode: str = "hybrid",
+    inactive_docs: List[str] | None = None,
 ) -> str:
     """
     Generate an answer, optionally augmented with retrieved context.
@@ -42,6 +44,7 @@ async def generate_rag_response(
             query=query,
             user_id=user_id,
             include_public=include_public,
+            inactive_docs=inactive_docs,
         )
         logger.info(
             "Retrieved %d chunks for user %s (include_public=%s)",
@@ -60,7 +63,7 @@ async def generate_rag_response(
         return await generate_chat_response(messages)
 
     # Build context-augmented prompt
-    system_prompt = build_rag_system_prompt(context_chunks)
+    system_prompt = build_rag_system_prompt(context_chunks, mode=mode)
 
     logger.debug(
         "System prompt built (%d chars):\n%s",
@@ -82,6 +85,8 @@ async def generate_rag_stream(
     conversation_history: List[Dict[str, str]],
     user_id: str,
     include_public: bool = False,
+    mode: str = "hybrid",
+    inactive_docs: List[str] | None = None,
 ):
     """
     Generate an answer via streaming, optionally augmented with retrieved context.
@@ -102,6 +107,7 @@ async def generate_rag_stream(
             query=query,
             user_id=user_id,
             include_public=include_public,
+            inactive_docs=inactive_docs,
         )
         yield {"type": "status", "step": "retrieved", "meta": {"chunks": len(context_chunks)}}
         logger.info(
@@ -126,7 +132,7 @@ async def generate_rag_stream(
 
     # Build context-augmented prompt
     yield {"type": "status", "step": "building_context"}
-    system_prompt = build_rag_system_prompt(context_chunks)
+    system_prompt = build_rag_system_prompt(context_chunks, mode=mode)
 
     logger.debug(
         "System prompt built for stream (%d chars):\n%s",

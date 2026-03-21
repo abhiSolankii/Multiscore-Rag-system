@@ -28,6 +28,7 @@ async def signup(user_in: UserCreate):
         "email": user_in.email,
         "hashed_password": get_password_hash(user_in.password),
         "is_active": True,
+        "config": user_in.config.model_dump(),
         "created_at": datetime.utcnow()
     }
     

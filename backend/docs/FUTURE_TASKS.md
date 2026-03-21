@@ -8,12 +8,12 @@ This document outlines planned improvements, refactors, and feature additions fo
   - _Debugging Consideration_: To prevent streams from obfuscating backend debug logs, streaming will be strictly controlled via a toggle in the `.env` settings (e.g., `ENABLE_STREAMING=true`).
 - **Live "Thinking" Status Traces**: Send live, step-by-step progress updates to the frontend during the generation phase (e.g., `"Retrieving documents..."` → `"Building context..."` → `"LLM is thinking..."`). This provides transparency and improves perceived latency.
 
-## 2. Schema Expansion: User Configs
+## 2. Schema Expansion: User Configs - Done
 
 - **User Preferences Object**: Expand the `User` MongoDB schema to include a dedicated `settings` or `config` object.
   - This object will persist user-specific toggles horizontally across the app, such as whether they have streaming responses turned on/off by default, UI themes, or default prompt behaviors.
 
-## 3. Schema Expansion: Chat-wise Configs
+## 3. Schema Expansion: Chat-wise Configs - Done
 
 Certain features require granular control at the individual _Chat_ level, rather than globally:
 

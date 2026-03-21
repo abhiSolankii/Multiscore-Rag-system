@@ -5,6 +5,7 @@ from bson import ObjectId
 
 from schemas import (
     ChatCreate, 
+    ChatUpdate,
     ChatResponse, 
     MessageCreate, 
     MessageResponse
@@ -26,12 +27,10 @@ async def create_chat(
     """Create a new chat session."""
     db = get_database()
     
-    new_chat = {
-        "user_id": current_user["_id"],
-        "title": chat_in.title,
-        "created_at": datetime.utcnow(),
-        "updated_at": datetime.utcnow(),
-    }
+    new_chat = chat_in.model_dump()
+    new_chat["user_id"] = current_user["_id"]
+    new_chat["created_at"] = datetime.utcnow()
+    new_chat["updated_at"] = datetime.utcnow()
     
     result = await db.chats.insert_one(new_chat)
     created_chat = await db.chats.find_one({"_id": result.inserted_id})
@@ -55,18 +54,42 @@ async def get_chats(
         
     return chats
 
+@router.patch("/{chat_id}", response_model=ChatResponse)
+async def update_chat(
+    chat_id: str,
+    chat_in: ChatUpdate,
+    current_user: dict = Depends(get_current_user)
+):
+    """Update a chat's title or config (e.g. toggle documents or change mode)."""
+    db = get_database()
+    
+    try:
+        chat_obj_id = ObjectId(chat_id)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid chat ID format")
+        
+    chat = await db.chats.find_one({"_id": chat_obj_id, "user_id": current_user["_id"]})
+    if not chat:
+        raise HTTPException(status_code=404, detail="Chat not found")
+        
+    update_data = chat_in.model_dump(exclude_unset=True)
+    update_data["updated_at"] = datetime.utcnow()
+    
+    await db.chats.update_one({"_id": chat_obj_id}, {"$set": update_data})
+    
+    updated_chat = await db.chats.find_one({"_id": chat_obj_id})
+    updated_chat["_id"] = str(updated_chat["_id"])
+    return updated_chat
+
 @router.post("/{chat_id}/messages/send")
 async def send_message(
     chat_id: str,
     message_in: MessageCreate,
     current_user: dict = Depends(get_current_user),
-    include_public: bool = False,
 ):
     """
     Send a message and get an AI response.
-
-    Query param:
-      include_public=true  →  also search the shared public knowledge base
+    System merges instructions dynamically based on ChatConfig (mode).
     """
     db = get_database()
     
@@ -75,10 +98,15 @@ async def send_message(
     except Exception:
         raise HTTPException(status_code=400, detail="Invalid chat ID format")
     
-    # 1. Verify chat ownership
+    # 1. Verify chat ownership & load config
     chat = await db.chats.find_one({"_id": chat_obj_id, "user_id": current_user["_id"]})
     if not chat:
         raise HTTPException(status_code=404, detail="Chat not found")
+        
+    chat_config = chat.get("config", {})
+    include_public = chat_config.get("include_public", False)
+    mode = chat_config.get("mode", "hybrid")
+    inactive_docs = chat_config.get("inactive_docs", [])
         
     # 2. Save user message
     user_message = {
@@ -98,8 +126,8 @@ async def send_message(
     llm_messages = [{"role": msg["role"], "content": msg["content"]} for msg in recent_msgs]
     
     logger.info(
-        "Generating response: chat=%s user=%s include_public=%s (streaming=%s)",
-        chat_id, current_user["_id"], include_public, settings.ENABLE_STREAMING
+        "Generating response: chat=%s user=%s include_public=%s mode=%s (streaming=%s)",
+        chat_id, current_user["_id"], include_public, mode, settings.ENABLE_STREAMING
     )
 
     # 5A. Handle Streaming Response
@@ -118,6 +146,8 @@ async def send_message(
                     conversation_history=llm_messages,
                     user_id=current_user["_id"],
                     include_public=include_public,
+                    mode=mode,
+                    inactive_docs=inactive_docs,
                 ):
                     if chunk_data["type"] == "status":
                         status_payload = {"step": chunk_data["step"]}
@@ -163,6 +193,8 @@ async def send_message(
         conversation_history=llm_messages,
         user_id=current_user["_id"],
         include_public=include_public,
+        mode=mode,
+        inactive_docs=inactive_docs,
     )
     
     # 6. Save assistant message

@@ -2,8 +2,13 @@ from pydantic import BaseModel, EmailStr, Field
 from typing import Optional, List
 from datetime import datetime
 
+class UserConfig(BaseModel):
+    enable_streaming: bool = True
+    default_mode: str = Field(default="hybrid", pattern="^(strict|hybrid)$")
+
 class UserBase(BaseModel):
     email: EmailStr
+    config: UserConfig = Field(default_factory=UserConfig)
 
 class UserCreate(UserBase):
     password: str = Field(..., min_length=8)
@@ -14,6 +19,7 @@ class UserLogin(UserBase):
 class UserUpdate(BaseModel):
     password: Optional[str] = Field(None, min_length=8)
     is_active: Optional[bool] = None
+    config: Optional[UserConfig] = None
 
 class UserInDB(UserBase):
     id: str = Field(..., alias="_id")

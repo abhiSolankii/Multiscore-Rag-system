@@ -34,7 +34,13 @@ LLM, Embedder and Vector DB are completely decoupled — swap any of them via `.
 - **Dynamic collection mapping** — per-user + per-embedding-model collections (e.g. `user_123_baai_bge_small`)
 - **Hybrid Retrieval** — semantic vector search + BM25 keyword search + optional cross-encoder reranking
 - **Vector segregation** — different embedding models → different collections (prevents dimension mismatch)
-- **Public / Private documents** — optional injection of public knowledge base chunks
+
+### ⚙️ User & Chat Configurations
+- **User Settings**: Horizontal preferences stored globally per user (e.g. `enable_streaming`, `default_mode`).
+- **Chat Configs**: Granular control natively embedded on every chat session:
+  - `include_public`: Toggles if the public knowledge base is searched.
+  - `mode ("strict" vs "hybrid")`: Instructs the LLM to either fiercely reject out-of-context knowledge, or softly supplement the context with its native knowledge if gaps exist.
+  - `inactive_docs`: Array of disabled document IDs. The RAG vector search ignores these natively via Qdrant's ultra-fast `must_not` query filter payloads.
 
 ### 🌊 Live SSE Streaming 
 - **ChatGPT-style StreamResponse**: Enable `ENABLE_STREAMING=true` in `.env` to return real-time Server-Sent Events (SSE). 
@@ -211,9 +217,9 @@ tail -f logs/app.log
 - `DELETE /api/ingest/document/{document_id}`
 
 ### Chat
-- `POST /api/chats/{id}/messages/send`  
-  → basic RAG query
-- `POST /api/chats/{id}/messages/send?include_public=true`  
-  → also pulls from public documents
+- `GET   /api/chats/list` — fetch chat history
+- `POST  /api/chats/create` — create new chat w/ config defaults
+- `PATCH /api/chats/{id}` — update chat config dynamically (e.g. toggling `inactive_docs`)
+- `POST  /api/chats/{id}/messages/send` — standard messaging endpoint (inherits all rules from chat document)
 
 Enjoy building with Multiscore RAG.

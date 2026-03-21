@@ -12,7 +12,8 @@ from .chat import (
     ChatResponse,
     MessageBase,
     MessageCreate,
-    MessageResponse
+    MessageResponse,
+    ChatUpdate
 )
 
 __all__ = [
@@ -27,5 +28,6 @@ __all__ = [
     "ChatResponse",
     "MessageBase",
     "MessageCreate",
-    "MessageResponse"
+    "MessageResponse",
+    "ChatUpdate"
 ]

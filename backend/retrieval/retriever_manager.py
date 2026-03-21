@@ -41,6 +41,7 @@ async def retrieve(
     query: str,
     user_id: str,
     include_public: bool = False,
+    inactive_docs: List[str] = None,
     top_k: int | None = None,
 ) -> List[Dict[str, Any]]:
     """
@@ -78,6 +79,7 @@ async def retrieve(
             top_k=top_k * 3,
             user_id=user_id,
             is_public_collection=False,
+            inactive_docs=inactive_docs,
         )
         candidates.extend(private_results)
         logger.debug(
@@ -106,6 +108,7 @@ async def retrieve(
                 top_k=top_k * 2,
                 user_id=None,
                 is_public_collection=True,
+                inactive_docs=inactive_docs,
             )
             candidates.extend(public_results)
             logger.debug(
