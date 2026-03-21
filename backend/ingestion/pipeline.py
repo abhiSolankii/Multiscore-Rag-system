@@ -17,9 +17,9 @@ from datetime import datetime
 
 from core.config import settings
 from core.logging import get_logger
-from ingestion.pdf_loader import load_pdf
-from ingestion.web_loader import load_url
-from ingestion.github_loader import load_github_repo
+from ingestion.loaders.pdf_loader import load_pdf
+from ingestion.loaders.web_loader import load_url
+from ingestion.loaders.github_loader import load_github_repo
 from ingestion.chunking import chunk_documents
 from ingestion.embedder import get_embedder
 from ingestion.job_tracker import create_job, mark_done, mark_failed
@@ -147,9 +147,24 @@ async def run_ingestion(
         ]
 
         batch_size = 100
-        for batch_start in range(0, len(points), batch_size):
+        total_batches = (len(points) + batch_size - 1) // batch_size
+        for batch_idx, batch_start in enumerate(range(0, len(points), batch_size)):
             batch = points[batch_start : batch_start + batch_size]
+            logger.debug(
+                "Upsert batch %d/%d: %d points → collection '%s'",
+                batch_idx + 1, total_batches, len(batch), collection_name,
+            )
+            # Log preview of first point in each batch
+            first = batch[0]
+            logger.debug(
+                "  batch[%d] first point: id=%s | content_preview=%.80s | meta=%s",
+                batch_idx + 1,
+                first.id,
+                first.payload.get("content", ""),
+                {k: v for k, v in first.payload.items() if k != "content"},
+            )
             await client.upsert(collection_name=collection_name, points=batch)
+
         logger.info(
             "Upserted %d vectors into collection '%s' (task=%s)",
             len(points), collection_name, task_id,

@@ -9,6 +9,10 @@ from typing import List, Dict, Any, Set
 import base64
 import httpx
 
+from core.logging import get_logger
+
+logger = get_logger(__name__)
+
 # File extensions we care about
 _TEXT_EXTENSIONS: Set[str] = {
     ".md", ".txt", ".py", ".js", ".ts", ".jsx", ".tsx",
@@ -40,6 +44,8 @@ async def _fetch_tree(owner: str, repo: str, client: httpx.AsyncClient) -> List[
     repo_resp.raise_for_status()
     default_branch = repo_resp.json().get("default_branch", "main")
 
+    logger.debug("GitHub repo: %s/%s | default branch: %s", owner, repo, default_branch)
+
     # Get recursive tree
     tree_resp = await client.get(
         f"https://api.github.com/repos/{owner}/{repo}/git/trees/{default_branch}?recursive=1"
@@ -67,6 +73,8 @@ async def load_github_repo(
         max_files: safety cap to avoid massive repos
     """
     owner, repo = _parse_repo_info(repo_url)
+    logger.debug("GitHub load started: %s/%s | max_files=%d", owner, repo, max_files)
+
     documents: List[Dict[str, Any]] = []
 
     headers = {"Accept": "application/vnd.github.v3+json"}
@@ -80,6 +88,14 @@ async def load_github_repo(
             if item.get("type") == "blob"
             and any(item["path"].endswith(ext) for ext in _TEXT_EXTENSIONS)
         ][:max_files]
+
+        logger.debug(
+            "GitHub tree: %d total items, %d text files selected (cap=%d): %s",
+            len(tree),
+            len(text_files),
+            max_files,
+            [item["path"] for item in text_files],
+        )
 
         for item in text_files:
             file_path = item["path"]
@@ -97,7 +113,13 @@ async def load_github_repo(
 
                 raw = raw.strip()
                 if not raw:
+                    logger.debug("Skipping empty file: %s", file_path)
                     continue
+
+                logger.debug(
+                    "Loaded file: %s | %d chars | preview: %.120s",
+                    file_path, len(raw), raw,
+                )
 
                 documents.append({
                     "content": raw,
@@ -110,8 +132,9 @@ async def load_github_repo(
                         "is_public": is_public,
                     },
                 })
-            except Exception:
-                # Skip files that fail (binary, too large, etc.)
+            except Exception as e:
+                logger.debug("Skipped file %s: %s", file_path, e)
                 continue
 
+    logger.debug("GitHub load complete: %d files loaded from %s", len(documents), repo_url)
     return documents

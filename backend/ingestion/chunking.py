@@ -8,7 +8,9 @@ from __future__ import annotations
 from typing import List, Dict, Any
 import tiktoken
 from core.config import settings
+from core.logging import get_logger
 
+logger = get_logger(__name__)
 
 # Use cl100k_base tokenizer (works for GPT-4, text-embedding-3, and is a
 # reasonable proxy for other models)
@@ -104,11 +106,35 @@ def chunk_documents(documents: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         raw_chunks = _split_text(content, size, overlap)
 
         for idx, chunk_text in enumerate(raw_chunks):
+            token_count = _count_tokens(chunk_text)
             chunk_meta = {
                 **metadata,
                 "chunk_index": idx,
-                "token_count": _count_tokens(chunk_text),
+                "token_count": token_count,
             }
-            all_chunks.append({"content": chunk_text, "metadata": chunk_meta})
+            chunk = {"content": chunk_text, "metadata": chunk_meta}
+            all_chunks.append(chunk)
+
+            # Log every chunk at DEBUG level — actual content, not just count
+            logger.debug(
+                "chunk[%d] tokens=%d source=%s | %s",
+                idx,
+                token_count,
+                metadata.get("source", "?"),
+                chunk_text[:120],
+            )
+
+    # Summary at INFO — always visible
+    if all_chunks:
+        token_counts = [c["metadata"]["token_count"] for c in all_chunks]
+        logger.info(
+            "Chunking complete: %d chunks | avg=%d tok | min=%d | max=%d",
+            len(all_chunks),
+            sum(token_counts) // len(token_counts),
+            min(token_counts),
+            max(token_counts),
+        )
+    else:
+        logger.warning("Chunking produced 0 chunks from %d documents", len(documents))
 
     return all_chunks

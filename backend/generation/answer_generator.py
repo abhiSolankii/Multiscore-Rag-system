@@ -61,8 +61,17 @@ async def generate_rag_response(
 
     # Build context-augmented prompt
     system_prompt = build_rag_system_prompt(context_chunks)
+
+    logger.debug(
+        "System prompt built (%d chars):\n%s",
+        len(system_prompt),
+        system_prompt,
+    )
+
     messages = [{"role": "system", "content": system_prompt}] + conversation_history
-    logger.debug("Built RAG prompt with %d context chunks", len(context_chunks))
+    logger.debug(
+        "Sending to LLM: %d messages total (1 system + %d history)",
+        len(messages), len(conversation_history),
+    )
 
     return await generate_chat_response(messages)
-

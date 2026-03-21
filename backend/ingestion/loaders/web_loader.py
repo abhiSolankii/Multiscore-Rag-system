@@ -8,6 +8,10 @@ from typing import List, Dict, Any
 import httpx
 from bs4 import BeautifulSoup
 
+from core.logging import get_logger
+
+logger = get_logger(__name__)
+
 
 async def load_url(
     url: str,
@@ -21,10 +25,14 @@ async def load_url(
     Returns a single-element list (the whole page as one Document).
     The chunker will split it later.
     """
+    logger.debug("Fetching URL: %s", url)
+
     async with httpx.AsyncClient(follow_redirects=True, timeout=30.0) as client:
         response = await client.get(url)
         response.raise_for_status()
         html = response.text
+
+    logger.debug("Fetched %d bytes from %s | status=%d", len(html), url, response.status_code)
 
     soup = BeautifulSoup(html, "html.parser")
 
@@ -45,6 +53,11 @@ async def load_url(
         # Fallback: get_text of entire body
         body = soup.find("body")
         content = body.get_text(separator="\n", strip=True) if body else ""
+
+    logger.debug(
+        "Web extracted: %d chars from %s | preview: %.200s",
+        len(content), url, content,
+    )
 
     return [
         {

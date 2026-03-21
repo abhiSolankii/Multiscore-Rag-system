@@ -13,9 +13,11 @@ router = APIRouter()
 
 @router.post("/signup", response_model=UserResponse)
 async def signup(user_in: UserCreate):
+    logger.debug("Signup attempt: email=%s", user_in.email)
     db = get_database()
     existing_user = await db.users.find_one({"email": user_in.email})
     if existing_user:
+        logger.debug("Signup rejected — email already exists: %s", user_in.email)
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="User with this email already exists",
@@ -31,6 +33,7 @@ async def signup(user_in: UserCreate):
     
     await db.users.insert_one(user_dict)
     logger.info("New user registered: %s", user_in.email)
+    logger.debug("New user created: id=%s email=%s", user_dict["_id"], user_in.email)
     
     return {
         "id": user_dict["_id"],
@@ -41,6 +44,7 @@ async def signup(user_in: UserCreate):
 
 @router.post("/login", response_model=Token)
 async def login(user_in: UserLogin):
+    logger.debug("Login attempt: email=%s", user_in.email)
     db = get_database()
     user = await db.users.find_one({"email": user_in.email})
     
@@ -58,6 +62,10 @@ async def login(user_in: UserLogin):
     access_token = create_access_token(subject=user["_id"])
     refresh_token = create_refresh_token(subject=user["_id"])
     logger.info("User logged in: %s (id=%s)", user["email"], user["_id"])
+    logger.debug(
+        "Tokens issued: user_id=%s | access=30min | refresh=%dd",
+        user["_id"], settings.REFRESH_TOKEN_EXPIRE_DAYS,
+    )
     
     return {
         "access_token": access_token,
@@ -67,6 +75,7 @@ async def login(user_in: UserLogin):
 
 @router.post("/refresh", response_model=Token)
 async def refresh_token(request: RefreshTokenRequest):
+    logger.debug("Token refresh attempt")
     try:
         payload = jwt.decode(
             request.refresh_token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM]
@@ -75,6 +84,7 @@ async def refresh_token(request: RefreshTokenRequest):
         if token_data.type != "refresh":
             raise HTTPException(status_code=401, detail="Invalid token type")
     except (JWTError, Exception):
+        logger.debug("Token refresh failed — invalid or expired refresh token")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Could not validate refresh token",
@@ -91,6 +101,7 @@ async def refresh_token(request: RefreshTokenRequest):
     access_token = create_access_token(subject=user["_id"])
     new_refresh_token = create_refresh_token(subject=user["_id"])
     logger.info("Tokens refreshed for user id=%s", token_data.sub)
+    logger.debug("New tokens issued for user_id=%s", token_data.sub)
     
     return {
         "access_token": access_token,

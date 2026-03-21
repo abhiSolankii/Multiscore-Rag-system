@@ -8,6 +8,10 @@ from typing import List, Dict, Any
 from pypdf import PdfReader
 import io
 
+from core.logging import get_logger
+
+logger = get_logger(__name__)
+
 
 def load_pdf(
     file_bytes: bytes,
@@ -37,12 +41,21 @@ def load_pdf(
     """
     documents: List[Dict[str, Any]] = []
     reader = PdfReader(io.BytesIO(file_bytes))
+    total_pages = len(reader.pages)
+
+    logger.debug("PDF opened: %s | total pages=%d | doc_id=%s", filename, total_pages, document_id)
 
     for page_num, page in enumerate(reader.pages):
         text = page.extract_text() or ""
         text = text.strip()
         if not text:
-            continue  # Skip blank pages
+            logger.debug("Page %d is blank — skipping", page_num)
+            continue
+
+        logger.debug(
+            "Page %d extracted: %d chars | preview: %.200s",
+            page_num, len(text), text,
+        )
 
         documents.append({
             "content": text,
@@ -56,4 +69,8 @@ def load_pdf(
             },
         })
 
+    logger.debug(
+        "PDF load complete: %s | %d/%d pages had content",
+        filename, len(documents), total_pages,
+    )
     return documents

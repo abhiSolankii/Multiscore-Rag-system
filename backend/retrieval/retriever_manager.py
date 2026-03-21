@@ -58,7 +58,10 @@ async def retrieve(
     if top_k is None:
         top_k = settings.RETRIEVAL_TOP_K
 
-    logger.debug("Retrieve: query='%.60s...' user=%s include_public=%s top_k=%d", query, user_id, include_public, top_k)
+    logger.debug(
+        "Retrieve called: query='%s' | user=%s | include_public=%s | top_k=%d",
+        query, user_id, include_public, top_k,
+    )
 
     # 1. Embed query
     embedder = get_embedder()
@@ -77,7 +80,19 @@ async def retrieve(
             is_public_collection=False,
         )
         candidates.extend(private_results)
-        logger.debug("Private vector search: %d results from '%s'", len(private_results), private_collection)
+        logger.debug(
+            "Private vector search: %d results from '%s'",
+            len(private_results), private_collection,
+        )
+        for i, r in enumerate(private_results):
+            logger.debug(
+                "  private[%d] score=%.4f | source=%s | chunk_index=%s | %.120s",
+                i,
+                r.get("score", 0),
+                r.get("metadata", {}).get("source", "?"),
+                r.get("metadata", {}).get("chunk_index", "?"),
+                r.get("content", ""),
+            )
     except Exception as e:
         logger.warning("Private collection '%s' not found or search failed: %s", private_collection, e)
 
@@ -93,7 +108,18 @@ async def retrieve(
                 is_public_collection=True,
             )
             candidates.extend(public_results)
-            logger.debug("Public vector search: %d results from '%s'", len(public_results), public_collection)
+            logger.debug(
+                "Public vector search: %d results from '%s'",
+                len(public_results), public_collection,
+            )
+            for i, r in enumerate(public_results):
+                logger.debug(
+                    "  public[%d] score=%.4f | source=%s | %.120s",
+                    i,
+                    r.get("score", 0),
+                    r.get("metadata", {}).get("source", "?"),
+                    r.get("content", ""),
+                )
         except Exception as e:
             logger.warning("Public collection search failed: %s", e)
 
@@ -119,5 +145,17 @@ async def retrieve(
     else:
         candidates = candidates[:top_k]
 
+    # Final results summary
     logger.info("Retrieval complete: %d final chunks returned for user %s", len(candidates), user_id)
+    logger.debug("Final chunks passed to LLM:")
+    for i, c in enumerate(candidates):
+        logger.debug(
+            "  final[%d] score=%.4f | source=%s | tokens=%s | %.150s",
+            i,
+            c.get("score", 0),
+            c.get("metadata", {}).get("source", "?"),
+            c.get("metadata", {}).get("token_count", "?"),
+            c.get("content", ""),
+        )
+
     return candidates

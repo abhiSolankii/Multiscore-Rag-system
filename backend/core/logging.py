@@ -40,6 +40,8 @@ _NOISY_LOGGERS = [
     "sentence_transformers",
     "transformers",
     "huggingface_hub",
+    "passlib",           # Silences "detected bcrypt backend" spam
+    "passlib.handlers",
     "uvicorn.access",   # We log requests ourselves via middleware
 ]
 

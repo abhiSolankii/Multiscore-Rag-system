@@ -5,12 +5,38 @@ Context trimming is simple top_k for now (see RAG_README.md for future token-bud
 from __future__ import annotations
 
 from typing import List, Dict, Any
+from core.logging import get_logger
 
+logger = get_logger(__name__)
+
+# RAG_SYSTEM_PROMPT = """\
+# You are a helpful AI assistant. Answer the user's question using ONLY the provided context below.
+# If the context does not contain enough information to answer the question, say so clearly — do not make up information.
+# Always cite your sources by referencing the actual filename or URL, including the page number if provided (e.g., [Source: filename.pdf, Page 12]).
+
+# Context:
+# {context}
+
+# """
 
 RAG_SYSTEM_PROMPT = """\
-You are a helpful AI assistant. Answer the user's question using ONLY the provided context below.
-If the context does not contain enough information to answer the question, say so clearly — do not make up information.
-Always cite your sources by referencing the [Source] tag at the end of each context block.
+You are a precise and analytical AI assistant.
+
+You MUST follow these rules:
+- Answer ONLY using the provided context
+- DO NOT repeat the same idea in different words
+- Merge similar points into a single concise statement
+- Each point must be unique and non-overlapping
+- Avoid redundancy completely
+- If multiple sources say the same thing, cite them together once
+- Always cite your sources by referencing the actual filename or URL, including the page number if provided (e.g., [Source: filename.pdf, Page 12]).
+
+Output format:
+- 3–5 bullet points (concise, non-redundant)
+- Then a short conclusion (2–3 lines)
+
+If the answer is not in the context, say:
+"Not enough information in the provided sources."
 
 Context:
 {context}
@@ -39,8 +65,17 @@ def build_rag_system_prompt(context_chunks: List[Dict[str, Any]]) -> str:
         meta = chunk.get("metadata", {})
         source = meta.get("source", "unknown")
         src_type = meta.get("type", "unknown")
+
+        #Get metadata for every chunk
+        logger.debug("Chunk %d: %s", i, meta)
+        
+        # Append page number to the source string if available (mostly for PDFs)
+        if "page" in meta:
+            # Note: page is 0-indexed in PyPDF, so we add 1 for human readability
+            source = f"{source}, Page {meta['page'] + 1}"
+            
         content = chunk.get("content", "")
-        block = f"[Chunk {i} | Source: {source} | Type: {src_type}]\n{content}"
+        block = f"[Source: {source} | Type: {src_type}]\n{content}"
         formatted_blocks.append(block)
 
     context_str = "\n\n---\n\n".join(formatted_blocks)
