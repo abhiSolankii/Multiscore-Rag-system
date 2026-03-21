@@ -1,0 +1,40 @@
+[project]
+name = "multiscore-rag"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    # Web framework
+    "fastapi",
+    "uvicorn[standard]",
+    # Database
+    "motor",
+    # Validation & settings
+    "pydantic[email]",
+    "pydantic-settings",
+    # Auth & security
+    "python-jose[cryptography]",
+    "passlib[bcrypt]",
+    "python-multipart",
+    "bcrypt==4.0.1",
+    "certifi",
+    # LLM
+    "openai>=2.28.0",
+    # --- RAG ---
+    # Vector DB
+    "qdrant-client>=1.9.0",
+    # Embeddings & reranker (local models)
+    "sentence-transformers>=3.0.0",
+    # BM25 hybrid search
+    "rank-bm25",
+    # PDF parsing
+    "pypdf>=4.0.0",
+    # Web scraping
+    "beautifulsoup4",
+    "httpx",
+    # Token counting
+    "tiktoken",
+    # Async file I/O
+    "aiofiles",
+]
