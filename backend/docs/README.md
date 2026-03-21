@@ -1,36 +1,62 @@
 # Multiscore RAG Backend
 
-A high-performance Retrieval-Augmented Generation (RAG) system with a secure authentication layer, modular architecture, and pluggable models.
+A high-performance Retrieval-Augmented Generation (RAG) system with secure authentication, modular architecture, and fully pluggable models (LLM, embeddings, vector DB).
 
-## 🧠 System Context (For LLMs / Developers)
+## 🧠 System Context (For Developers / LLMs)
 
-This project is a FastAPI backend serving a scalable RAG pipeline.
-**Core Tech Stack:**
+This project is a **FastAPI** backend delivering a scalable, private-capable RAG pipeline.
+
+**Core Tech Stack**
 - **Framework:** FastAPI / Python 3.12+
-- **Database:** MongoDB (Motor async driver) for users, chats, and ingestion job tracking.
-- **Tokens/Auth:** JWT (Access & Refresh tokens) with Bcrypt password hashing.
-- **Dependencies Manager:** `uv`
-- **Vector Database:** Qdrant (local Docker or Cloud) mapped dynamically.
-- **LLM Provider:** OpenRouter API (Default: `deepseek/deepseek-chat`). Pluggable via `.env`.
-- **Embeddings Pipeline:** Fully pluggable. Supports `openai` APIs natively, or completely `local` embeddings via HuggingFace `SentenceTransformers` (Default: `BAAI/bge-small-en-v1.5`).
-- **Loaders:** Custom local parsers for PDFs (`pypdf`), Web URLs (`BeautifulSoup`), and GitHub repositories.
+- **Database:** MongoDB (Motor async driver) — users, chats, ingestion job tracking
+- **Tokens / Auth:** JWT (Access 30m + Refresh 7d) with bcrypt password hashing
+- **Dependencies:** managed with `uv`
+- **Vector Database:** Qdrant (local Docker or Cloud), collections created dynamically
+- **LLM Provider:** OpenRouter API (default: `deepseek/deepseek-chat`), pluggable via `.env`
+- **Embeddings:** Fully pluggable — `openai` APIs or local `sentence-transformers` (default: `BAAI/bge-small-en-v1.5`)
+- **Document Loaders:** Custom parsers for PDFs (`pypdf`), Web URLs (`BeautifulSoup`), GitHub repositories
 
-**Architecture Paradigm:**
-Data flows from API routers → dependency resolution (passing raw MongoDB dicts) → service logic → Pydantic serialization. The architecture is explicitly decoupled, allowing the LLM, Embedder, and Vector DB to be swapped dynamically via `.env` without rewriting business logic.
+**Architecture Paradigm**  
+API routers → dependency resolution (raw MongoDB dicts) → service layer → Pydantic serialization.  
+LLM, Embedder and Vector DB are completely decoupled — swap any of them via `.env` without changing business logic.
 
 ---
 
 ## 🚀 Key Features
 
 ### 🔐 Authentication & Security
-- **JWT-Based Auth**: Secure Access (30m) and Refresh (7d) token implementation.
-- **Protected Routes**: Middleware dependencies verify sessions natively.
+- JWT-based authentication with short-lived access tokens and long-lived refresh tokens
+- Protected routes via FastAPI dependency injection / middleware
 
 ### 🗄️ Ingestion & RAG Pipeline
-- **Multi-Source Ingestion**: Asynchronously loads data from PDFs, Web pages, and GitHub.
-- **Intelligent Chunking**: Uses `tiktoken` (cl100k_base) to chunk strings recursively based on a strict token budget (e.g., 512 + 64 overlap). 
-- **Dynamic Vector Searching**: Collections automatically map to user IDs and models (e.g., `user_123_baai_bge_small`). Vector dimensions are auto-calculated at runtime.
-- **Hybrid Retrieval**: Combines native Vector Semantic Search with BM25 Lexical Keyword search.
+- **Multi-source ingestion** — PDFs, web pages, entire GitHub repositories (async)
+- **Intelligent chunking** — recursive `tiktoken` (cl100k_base) splitter with strict token budget (default ~512 + 64 overlap)
+- **Dynamic collection mapping** — per-user + per-embedding-model collections (e.g. `user_123_baai_bge_small`)
+- **Hybrid Retrieval** — semantic vector search + BM25 keyword search + optional cross-encoder reranking
+- **Vector segregation** — different embedding models → different collections (prevents dimension mismatch)
+- **Public / Private documents** — optional injection of public knowledge base chunks
+
+### 🌊 Live SSE Streaming 
+- **ChatGPT-style StreamResponse**: Enable `ENABLE_STREAMING=true` in `.env` to return real-time Server-Sent Events (SSE). 
+- **Thinking Traces**: The stream yields ephemeral progress cleanly formatted (`event: status`, `data: {"step": "retrieving", "meta": {"query": "..."}}`) covering `retrieving`, `retrieved`, `building_context`, `calling_llm`, and `generating`, before yielding text chunks (`event: token`, `data: {"text": "chunk"}`).
+- **Graceful DB Savings**: The backend only hits MongoDB once at the absolute end of the stream (or upon client disconnect). Disconnected streams save whatever was completed so far and are explicitly marked with `"status": "interrupted"`, while full streams are marked `"completed"`. 
+
+### 📦 Chunk Metadata & Citations
+Every stored chunk includes:
+```json
+{
+  "content": "...",
+  "document_id": "uuid4",
+  "source": "filename.pdf | https://... | github://...",
+  "type": "pdf | web | github",
+  "page": 0, // 0-based, PDF only
+  "chunk_index": 3,
+  "token_count": 128,
+  "user_id": "...",
+  "is_public": false
+}
+```
+→ Prompts include precise citations: `[Source: filename.pdf, Page 12]` → reduces hallucinations
 
 ---
 
@@ -38,62 +64,156 @@ Data flows from API routers → dependency resolution (passing raw MongoDB dicts
 
 ```text
 backend/
-├── api/                    # API Routers (Auth, Chat, Ingestion)
-├── core/                   # Security, Config (Pydantic), and Logging
-├── db/                     # MongoDB client and Qdrant connector
-├── schemas/                # Pydantic data validation (In/Out)
-├── generation/             # LLM logic (OpenRouter API, prompt generation)
-├── ingestion/              # Data ingest pipelines
-│   ├── loaders/            # Specific parsers: pdf_loader, web_loader, github_loader
-│   ├── chunking.py         # Recursive token-based text splitter
-│   ├── embedder.py         # Factory returning Local/OpenAI embedders
-│   └── pipeline.py         # Core orchestrator (Extract -> Chunk -> Embed -> Qdrant)
-├── retrieval/              # Search logic (Vector Search, BM25 Hybrid, Reranking)
-├── docs/                   # Documentation (You are here)
-├── logs/                   # Log output directory (app.log lives here)
-├── uploads/                # Ephemeral local storage for raw ingested files
-├── main.py                 # Application entry point
-└── pyproject.toml          # uv dependencies
+├── api/                    # Routers: auth, chat, ingestion
+├── core/                   # Security, config (Pydantic), logging setup
+├── db/                     # MongoDB client + Qdrant connector
+├── schemas/                # All Pydantic models (request/response)
+├── generation/             # LLM calls, streaming generators, prompt templates
+├── ingestion/              # Full ingestion pipeline
+│   ├── loaders/            # pdf_loader, web_loader, github_loader
+│   ├── chunking.py         # Recursive token-aware text splitter
+│   ├── embedder.py         # Factory: local HF or OpenAI embedder
+│   └── pipeline.py         # Orchestrator: load → chunk → embed → store
+├── retrieval/              # Vector + BM25 hybrid search, reranking, deduplication
+├── docs/                   # Documentation
+├── logs/                   # app.log (when DEBUG_LOGGING=true)
+├── uploads/                # Temporary raw file storage
+├── main.py                 # FastAPI app entry point
+└── pyproject.toml          # uv / PEP 621 dependencies
 ```
 
 ---
 
 ## 📋 Comprehensive Debug Logging
 
-The application maintains a highly optimized logging system:
+Optimized dual-output logging:
+- **Console** — only `INFO`, `WARNING`, `ERROR`
+- **File** (`logs/app.log`) — full DEBUG trace when `DEBUG_LOGGING=true`
 
-- **Console:** Stays clean, only showing `INFO`, `WARNING`, and `ERROR` events.
-- **File (`logs/app.log`):** When `DEBUG_LOGGING=true` in `.env`, the file captures granular debug information at every stage of the pipeline without cluttering the terminal.
+**Traces include (when debug enabled):**
+- Auth: login, token lifecycle
+- Ingestion: extracted text previews, GitHub tree manifests
+- Chunking: token counts, source offsets, chunk previews
+- Embedder: model load time, vector dimensions, sample fingerprints
+- Retrieval: query text, candidate scores, chunk indices
+- Prompt: complete rendered system prompt
+- LLM: model slug, full message history, raw response strings
 
-**Debug Coverage Examples:**
-- **Auth:** Login attempts, token refresh lifecycles.
-- **Ingestion:** Page extractions, 200-character content previews, GitHub tree manifests.
-- **Chunking:** Every individual chunk's token count, source index, and raw text preview.
-- **Embedder:** Model initialization time, vector dimensions, and sample vector fingerprints.
-- **Retrieval:** The actual search query text, scores of returned candidates, and chunk indices.
-- **Prompt Gen:** The complete, un-truncated final rendered system prompt passed to the LLM.
-- **LLM Call:** Model slugs, message histories, and the full raw response string.
-
-*(Note: Third-party loggers like `passlib` and `httpx` are manually silenced in `core/logging.py` to prevent log pollution).*
+Third-party loggers (`passlib`, `httpx`, etc.) are silenced to reduce noise.
 
 ---
 
-## 🛠️ Setup & Installation
+## 🏗️ The RAG Flow (when RAG_ENABLED=true)
 
-### 1. Prerequisites
-- Python 3.12+
-- MongoDB instance (Local or Atlas)
-- Qdrant Vector DB (e.g., `docker run -d -p 6333:6333 qdrant/qdrant`)
+```
+User message → /api/chats/{id}/messages/send
+    ↓
+answer_generator.generate_rag_response() / generate_rag_stream()
+    ↓
+retriever_manager.retrieve()
+    ├─ Embed query (local HF or OpenAI)
+    ├─ Vector search (user private collection)
+    ├─ Optional: vector search in public collection
+    ├─ Deduplicate (hash-based)
+    ├─ BM25 keyword search + Reciprocal Rank Fusion
+    └─ Optional: cross-encoder reranking
+    ↓
+prompt_templates.build_rag_system_prompt()   # with citations
+    ↓
+llm.generate_chat_response() / generate_chat_stream()  → OpenRouter
+```
 
-### 2. Environment Setup
+When `RAG_ENABLED=false` → direct LLM call (no retrieval)
+
+---
+
+## ⚙️ Important Environment Variables
+
+### LLM (generation)
+| Variable             | Default                  | Purpose                   |
+| -------------------- | ------------------------ | ------------------------- |
+| `OPENROUTER_API_KEY` | —                        | Required for LLM calls    |
+| `LLM_MODEL`          | `deepseek/deepseek-chat` | Any OpenRouter model slug |
+| `ENABLE_STREAMING`   | `true`                   | Yields streaming SSEs     |
+
+### Embeddings
+| Variable             | Default                  | Purpose                             |
+| -------------------- | ------------------------ | ----------------------------------- |
+| `EMBEDDING_PROVIDER` | `local`                  | `local` or `openai`                 |
+| `EMBEDDING_MODEL`    | `BAAI/bge-small-en-v1.5` | HuggingFace ID or OpenAI model name |
+
+> Dimensions are **auto-detected** at runtime — no need to set `EMBEDDING_DIMENSIONS`
+
+### Infrastructure
+- `QDRANT_URL` – local: `http://localhost:6333` or cloud
+- `MONGODB_URL`
+- `SECRET_KEY` – JWT signing
+- `RAG_ENABLED` – `true` / `false`
+- `DEBUG_LOGGING` – `true` for detailed file logs
+
+---
+
+## 🛠️ Setup & Quick Start (Recommended: Local Embeddings)
+
+1. Start Qdrant (if local)
+```bash
+docker run -d -p 6333:6333 qdrant/qdrant
+```
+
+2. Prepare environment
 ```bash
 cp .env.example .env
 ```
-Update `SECRET_KEY`, `MONGODB_URL`, `OPENROUTER_API_KEY`, and embedding variables.
 
-### 3. Install & Run
+Minimal privacy-focused `.env` example:
+```bash
+# ────────────────────────────────────────
+SECRET_KEY=your-very-long-random-secret-here
+MONGODB_URL=mongodb://localhost:27017
+QDRANT_URL=http://localhost:6333
+
+RAG_ENABLED=true
+DEBUG_LOGGING=true
+
+ENABLE_STREAMING=true
+
+EMBEDDING_PROVIDER=local
+EMBEDDING_MODEL=BAAI/bge-small-en-v1.5
+
+OPENROUTER_API_KEY=sk-or-v1-...
+LLM_MODEL=deepseek/deepseek-chat
+```
+
+3. Install & launch
 ```bash
 uv sync
 uv run uvicorn main:app --reload
 ```
-API runs on `http://localhost:8000`. Swagger Docs at `http://localhost:8000/docs`.
+
+→ API available at `http://localhost:8000`  
+→ Interactive docs: `http://localhost:8000/docs`
+
+4. Monitor (very verbose when debug is on)
+```bash
+tail -f logs/app.log
+```
+
+---
+
+## 📡 Main API Endpoints
+
+### Ingestion
+- `POST /api/ingest/file` — upload PDF + `is_public` flag
+- `POST /api/ingest/url` — ingest webpage
+- `POST /api/ingest/github` — ingest repo
+- `GET  /api/ingest/status/{task_id}`
+- `GET  /api/ingest/documents?...` — list by type (`pdf`, `web`, `github`)
+- `DELETE /api/ingest/document/{document_id}`
+
+### Chat
+- `POST /api/chats/{id}/messages/send`  
+  → basic RAG query
+- `POST /api/chats/{id}/messages/send?include_public=true`  
+  → also pulls from public documents
+
+Enjoy building with Multiscore RAG.

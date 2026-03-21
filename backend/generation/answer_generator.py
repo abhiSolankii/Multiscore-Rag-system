@@ -9,7 +9,7 @@ from typing import List, Dict
 
 from core.config import settings
 from core.logging import get_logger
-from generation.llm import generate_chat_response
+from generation.llm import generate_chat_response, generate_chat_stream
 from generation.prompt_templates import build_rag_system_prompt, PLAIN_SYSTEM_PROMPT
 from retrieval.retriever_manager import retrieve
 
@@ -75,3 +75,72 @@ async def generate_rag_response(
     )
 
     return await generate_chat_response(messages)
+
+
+async def generate_rag_stream(
+    query: str,
+    conversation_history: List[Dict[str, str]],
+    user_id: str,
+    include_public: bool = False,
+):
+    """
+    Generate an answer via streaming, optionally augmented with retrieved context.
+    Yields text chunks.
+    """
+    if not settings.RAG_ENABLED:
+        logger.debug("RAG disabled — using plain LLM stream for user %s", user_id)
+        yield {"type": "status", "step": "calling_llm"}
+        yield {"type": "status", "step": "generating"}
+        async for chunk in generate_chat_stream(conversation_history):
+            yield {"type": "token", "text": chunk}
+        return
+
+    # Retrieve context
+    yield {"type": "status", "step": "retrieving", "meta": {"query": query}}
+    try:
+        context_chunks = await retrieve(
+            query=query,
+            user_id=user_id,
+            include_public=include_public,
+        )
+        yield {"type": "status", "step": "retrieved", "meta": {"chunks": len(context_chunks)}}
+        logger.info(
+            "Retrieved %d chunks for streaming (user %s)",
+            len(context_chunks), user_id,
+        )
+    except Exception as e:
+        logger.warning(
+            "Retrieval failed for user %s stream — falling back to plain LLM: %s",
+            user_id, str(e),
+        )
+        context_chunks = []
+
+    if not context_chunks:
+        logger.info("No context found for user %s stream — using plain LLM", user_id)
+        yield {"type": "status", "step": "calling_llm"}
+        yield {"type": "status", "step": "generating"}
+        messages = [{"role": "system", "content": PLAIN_SYSTEM_PROMPT}] + conversation_history
+        async for chunk in generate_chat_stream(messages):
+            yield {"type": "token", "text": chunk}
+        return
+
+    # Build context-augmented prompt
+    yield {"type": "status", "step": "building_context"}
+    system_prompt = build_rag_system_prompt(context_chunks)
+
+    logger.debug(
+        "System prompt built for stream (%d chars):\n%s",
+        len(system_prompt),
+        system_prompt,
+    )
+
+    messages = [{"role": "system", "content": system_prompt}] + conversation_history
+    logger.debug(
+        "Sending stream to LLM: %d messages total",
+        len(messages)
+    )
+
+    yield {"type": "status", "step": "calling_llm"}
+    yield {"type": "status", "step": "generating"}
+    async for chunk in generate_chat_stream(messages):
+        yield {"type": "token", "text": chunk}

@@ -18,6 +18,7 @@ class Settings(BaseSettings):
     MAX_HISTORY_MESSAGES: int = 5
     OPENROUTER_API_KEY: Optional[str] = None
     LLM_MODEL: str = "deepseek/deepseek-chat"
+    ENABLE_STREAMING: bool = False
 
     # ── RAG ──────────────────────────────────────────────────────────────────
 

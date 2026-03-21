@@ -55,7 +55,7 @@ async def get_chats(
         
     return chats
 
-@router.post("/{chat_id}/messages/send", response_model=MessageResponse)
+@router.post("/{chat_id}/messages/send")
 async def send_message(
     chat_id: str,
     message_in: MessageCreate,
@@ -97,11 +97,67 @@ async def send_message(
     # 4. Format history for LLM
     llm_messages = [{"role": msg["role"], "content": msg["content"]} for msg in recent_msgs]
     
-    # 5. Generate response — RAG-augmented if enabled, plain LLM otherwise
     logger.info(
-        "Generating response: chat=%s user=%s include_public=%s",
-        chat_id, current_user["_id"], include_public,
+        "Generating response: chat=%s user=%s include_public=%s (streaming=%s)",
+        chat_id, current_user["_id"], include_public, settings.ENABLE_STREAMING
     )
+
+    # 5A. Handle Streaming Response
+    if settings.ENABLE_STREAMING:
+        from fastapi.responses import StreamingResponse
+        import json
+        from generation.answer_generator import generate_rag_stream
+        
+        async def event_generator():
+            full_content = ""
+            is_completed = False
+            try:
+                # Generate chunks live
+                async for chunk_data in generate_rag_stream(
+                    query=message_in.content,
+                    conversation_history=llm_messages,
+                    user_id=current_user["_id"],
+                    include_public=include_public,
+                ):
+                    if chunk_data["type"] == "status":
+                        status_payload = {"step": chunk_data["step"]}
+                        if "meta" in chunk_data:
+                            status_payload["meta"] = chunk_data["meta"]
+                        yield f"event: status\ndata: {json.dumps(status_payload)}\n\n"
+                    elif chunk_data["type"] == "token":
+                        full_content += chunk_data["text"]
+                        # Yield SSE formatted data
+                        yield f"event: token\ndata: {json.dumps({'text': chunk_data['text']})}\n\n"
+                    
+                # Signal stream is complete (standard SSE pattern)
+                is_completed = True
+                yield "event: done\ndata: [DONE]\n\n"
+            except Exception as e:
+                logger.error("SSE Streaming error: %s", str(e), exc_info=True)
+                yield f"event: error\ndata: {json.dumps({'error': str(e)})}\n\n"
+            finally:
+                # Guaranteed to execute even if client drops connection gracefully or ungracefully
+                if full_content.strip():
+                    assistant_message = {
+                        "chat_id": chat_id,
+                        "role": "assistant",
+                        "content": full_content,
+                        "status": "completed" if is_completed else "interrupted",
+                        "created_at": datetime.utcnow()
+                    }
+                    await db.messages.insert_one(assistant_message)
+                    await db.chats.update_one({"_id": chat_obj_id}, {"$set": {"updated_at": datetime.utcnow()}})
+                    
+        return StreamingResponse(
+            event_generator(),
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "Connection": "keep-alive",
+            },
+        )
+
+    # 5B. Handle Standard Sync JSON Response
     llm_reply_content = await generate_rag_response(
         query=message_in.content,
         conversation_history=llm_messages,

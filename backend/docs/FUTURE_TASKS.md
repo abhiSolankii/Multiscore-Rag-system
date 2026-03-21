@@ -2,7 +2,7 @@
 
 This document outlines planned improvements, refactors, and feature additions for the Multiscore RAG backend and its integration with the frontend.
 
-## 1. Streaming & Real-Time UX
+## 1. Streaming & Real-Time UX - Done
 
 - **LLM Streaming (ChatGPT-style)**: Implement Server-Sent Events (SSE) to stream the final LLM response token-by-token.
   - _Debugging Consideration_: To prevent streams from obfuscating backend debug logs, streaming will be strictly controlled via a toggle in the `.env` settings (e.g., `ENABLE_STREAMING=true`).

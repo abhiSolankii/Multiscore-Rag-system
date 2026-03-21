@@ -45,3 +45,35 @@ async def generate_chat_response(messages: List[Dict[str, str]]) -> str:
     except Exception as e:
         logger.error("LLM generation failed: %s", str(e), exc_info=True)
         return f"[Error] Failed to generate response: {str(e)}"
+
+
+async def generate_chat_stream(messages: List[Dict[str, str]]):
+    """
+    Generates a streaming reply using OpenRouter LLM based on the conversation history.
+    Outputs an AsyncGenerator yielding raw text chunks.
+    """
+    if not client:
+        logger.warning("OPENROUTER_API_KEY not set — returning mock response stream")
+        yield "[Mock Stream] Please configure OPENROUTER_API_KEY in .env"
+        return
+
+    try:
+        logger.debug(
+            "LLM STREAM call: model=%s | messages=%d",
+            settings.LLM_MODEL,
+            len(messages),
+        )
+        # We explicitly request a stream from the API
+        response_stream = await client.chat.completions.create(
+            model=settings.LLM_MODEL,
+            messages=messages,
+            stream=True,
+        )
+        
+        async for chunk in response_stream:
+            content = chunk.choices[0].delta.content
+            if content:
+                yield content
+    except Exception as e:
+        logger.error("LLM streaming failed: %s", str(e), exc_info=True)
+        yield f"[Error] Failed to stream response: {str(e)}"
