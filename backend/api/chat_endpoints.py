@@ -139,6 +139,8 @@ async def send_message(
         async def event_generator():
             full_content = ""
             is_completed = False
+            used_chunks = []
+            tokens_used = None
             try:
                 # Generate chunks live
                 async for chunk_data in generate_rag_stream(
@@ -153,11 +155,16 @@ async def send_message(
                         status_payload = {"step": chunk_data["step"]}
                         if "meta" in chunk_data:
                             status_payload["meta"] = chunk_data["meta"]
+                            if chunk_data["step"] == "retrieved" and "chunks" in chunk_data["meta"]:
+                                used_chunks = chunk_data["meta"]["chunks"]
                         yield f"event: status\ndata: {json.dumps(status_payload)}\n\n"
                     elif chunk_data["type"] == "token":
                         full_content += chunk_data["text"]
                         # Yield SSE formatted data
                         yield f"event: token\ndata: {json.dumps({'text': chunk_data['text']})}\n\n"
+                    elif chunk_data["type"] == "usage":
+                        tokens_used = chunk_data["data"]
+                        yield f"event: usage\ndata: {json.dumps(tokens_used)}\n\n"
                     
                 # Signal stream is complete (standard SSE pattern)
                 is_completed = True
@@ -173,10 +180,18 @@ async def send_message(
                         "role": "assistant",
                         "content": full_content,
                         "status": "completed" if is_completed else "interrupted",
+                        "used_chunks": used_chunks,
+                        "tokens_used": tokens_used,
                         "created_at": datetime.utcnow()
                     }
                     await db.messages.insert_one(assistant_message)
                     await db.chats.update_one({"_id": chat_obj_id}, {"$set": {"updated_at": datetime.utcnow()}})
+                    
+                    if tokens_used:
+                        await db.users.update_one(
+                            {"_id": current_user["_id"]},
+                            {"$inc": {"total_tokens_used": tokens_used.get("total_tokens", 0)}}
+                        )
                     
         return StreamingResponse(
             event_generator(),
@@ -188,7 +203,7 @@ async def send_message(
         )
 
     # 5B. Handle Standard Sync JSON Response
-    llm_reply_content = await generate_rag_response(
+    llm_reply_content, used_chunks, tokens_used = await generate_rag_response(
         query=message_in.content,
         conversation_history=llm_messages,
         user_id=current_user["_id"],
@@ -202,9 +217,17 @@ async def send_message(
         "chat_id": chat_id,
         "role": "assistant",
         "content": llm_reply_content,
+        "used_chunks": used_chunks,
+        "tokens_used": tokens_used,
         "created_at": datetime.utcnow()
     }
     result = await db.messages.insert_one(assistant_message)
+    
+    if tokens_used:
+        await db.users.update_one(
+            {"_id": current_user["_id"]},
+            {"$inc": {"total_tokens_used": tokens_used.get("total_tokens", 0)}}
+        )
     
     # 7. Update chat timestamp
     await db.chats.update_one({"_id": chat_obj_id}, {"$set": {"updated_at": datetime.utcnow()}})

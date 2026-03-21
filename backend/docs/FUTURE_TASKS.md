@@ -35,7 +35,7 @@ Current loaders need to be upgraded for higher-fidelity text extraction:
   - **Ignore**: `node_modules/`, `*.lock`, `venv/`, and all binary/image files.
   - **Focus explicitly on**: `README`, `/docs`, `.md`, `.py`, `.ts`, `.js`, etc.
 
-## 5. Rich Source Citations (Frontend UX)
+## 5. Rich Source Citations (Frontend UX) - Done
 
 When the LLM cites a source, the frontend UX should be deeply interactive:
 
@@ -54,7 +54,7 @@ When the LLM cites a source, the frontend UX should be deeply interactive:
 - We currently blindly fetch the latest 5 messages + the current query to maintain conversation context.
 - _Improvement needed_: Explore upgrading this from a fixed `message_count` to a dynamic **Token Budget**. If the last 2 messages were massive 4,000-word essays, fetching 5 could blow out the OpenRouter context window. It should dynamically pack as many prior messages as fit comfortably into a `MAX_HISTORY_TOKENS` limit.
 
-## 9. User Token Limits & Cost Tracking
+## 9. User Token Limits & Cost Tracking - Done
 
 - **Is it possible?** Yes! Every API response from OpenRouter includes a `usage` object detailing exact `prompt_tokens`, `completion_tokens`, and `total_tokens`.
 - Expand the message schema to store `tokens_used` for every single assistant response.

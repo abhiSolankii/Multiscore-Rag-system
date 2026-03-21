@@ -15,14 +15,16 @@ else:
     client = None
 
 
-async def generate_chat_response(messages: List[Dict[str, str]]) -> str:
+from typing import List, Dict, Tuple, Optional
+
+async def generate_chat_response(messages: List[Dict[str, str]]) -> Tuple[str, Optional[dict]]:
     """
     Generates a reply using OpenRouter LLM based on the conversation history.
     If no API key is provided, returns a mock development response.
     """
     if not client:
         logger.warning("OPENROUTER_API_KEY not set — returning mock response")
-        return "[Mock Response] Please configure OPENROUTER_API_KEY in .env to enable real LLM responses."
+        return "[Mock Response] Please configure OPENROUTER_API_KEY in .env to enable real LLM responses.", None
 
     try:
         logger.debug(
@@ -36,15 +38,16 @@ async def generate_chat_response(messages: List[Dict[str, str]]) -> str:
             messages=messages,
         )
         content = response.choices[0].message.content
+        usage = getattr(response, "usage", None)
         logger.debug(
             "LLM response (%d chars):\n%s",
             len(content),
             content,
         )
-        return content
+        return content, usage.model_dump() if usage else None
     except Exception as e:
         logger.error("LLM generation failed: %s", str(e), exc_info=True)
-        return f"[Error] Failed to generate response: {str(e)}"
+        return f"[Error] Failed to generate response: {str(e)}", None
 
 
 async def generate_chat_stream(messages: List[Dict[str, str]]):
@@ -54,7 +57,7 @@ async def generate_chat_stream(messages: List[Dict[str, str]]):
     """
     if not client:
         logger.warning("OPENROUTER_API_KEY not set — returning mock response stream")
-        yield "[Mock Stream] Please configure OPENROUTER_API_KEY in .env"
+        yield {"type": "token", "text": "[Mock Stream] Please configure OPENROUTER_API_KEY in .env"}
         return
 
     try:
@@ -63,17 +66,23 @@ async def generate_chat_stream(messages: List[Dict[str, str]]):
             settings.LLM_MODEL,
             len(messages),
         )
-        # We explicitly request a stream from the API
+        # We explicitly request a stream from the API, enabling token usage data
         response_stream = await client.chat.completions.create(
             model=settings.LLM_MODEL,
             messages=messages,
             stream=True,
+            stream_options={"include_usage": True},
         )
         
         async for chunk in response_stream:
-            content = chunk.choices[0].delta.content
-            if content:
-                yield content
+            usage = getattr(chunk, "usage", None)
+            if usage:
+                yield {"type": "usage", "data": usage.model_dump()}
+                
+            if chunk.choices and len(chunk.choices) > 0:
+                content = chunk.choices[0].delta.content
+                if content:
+                    yield {"type": "token", "text": content}
     except Exception as e:
         logger.error("LLM streaming failed: %s", str(e), exc_info=True)
-        yield f"[Error] Failed to stream response: {str(e)}"
+        yield {"type": "error", "text": f"[Error] Failed to stream response: {str(e)}"}

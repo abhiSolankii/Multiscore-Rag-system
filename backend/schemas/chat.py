@@ -38,6 +38,8 @@ class MessageResponse(MessageBase):
     id: str = Field(..., alias="_id")
     chat_id: str
     created_at: datetime
+    used_chunks: Optional[List[dict]] = None
+    tokens_used: Optional[dict] = None
 
     class Config:
         from_attributes = True

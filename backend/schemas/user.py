@@ -5,6 +5,7 @@ from datetime import datetime
 class UserConfig(BaseModel):
     enable_streaming: bool = True
     default_mode: str = Field(default="hybrid", pattern="^(strict|hybrid)$")
+    max_token_limit: Optional[int] = None
 
 class UserBase(BaseModel):
     email: EmailStr
@@ -25,11 +26,13 @@ class UserInDB(UserBase):
     id: str = Field(..., alias="_id")
     hashed_password: str
     is_active: bool = True
+    total_tokens_used: int = 0
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
 class UserResponse(UserBase):
     id: str
     is_active: bool
+    total_tokens_used: int = 0
     created_at: datetime
 
     class Config:

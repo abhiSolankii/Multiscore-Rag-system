@@ -47,8 +47,8 @@ LLM, Embedder and Vector DB are completely decoupled — swap any of them via `.
 - **Thinking Traces**: The stream yields ephemeral progress cleanly formatted (`event: status`, `data: {"step": "retrieving", "meta": {"query": "..."}}`) covering `retrieving`, `retrieved`, `building_context`, `calling_llm`, and `generating`, before yielding text chunks (`event: token`, `data: {"text": "chunk"}`).
 - **Graceful DB Savings**: The backend only hits MongoDB once at the absolute end of the stream (or upon client disconnect). Disconnected streams save whatever was completed so far and are explicitly marked with `"status": "interrupted"`, while full streams are marked `"completed"`. 
 
-### 📦 Chunk Metadata & Citations
-Every stored chunk includes:
+### 📦 Chunk Metadata & Rich Citations
+Every stored chunk includes exact origin footprints:
 ```json
 {
   "content": "...",
@@ -62,7 +62,13 @@ Every stored chunk includes:
   "is_public": false
 }
 ```
-→ Prompts include precise citations: `[Source: filename.pdf, Page 12]` → reduces hallucinations
+→ **Upfront Loading**: For peak frontend UI rendering, the *exact chunks* used by the RAG search are yielded inside the SSE stream instantly (`event: status`, `data: {"step": "retrieved", "meta": {"chunks": [...]}}`) BEFORE the LLM begins streaming text. Frontends can instantly mount interactive modals or PDF viewer URLs cleanly.
+
+### 📊 Token Metrics & Cost Tracking
+- **API Transparency**: `generate_chat_stream` automatically invokes `$stream_options` to boldly capture exact OpenRouter/OpenAI token counts (`prompt_tokens`, `completion_tokens`).
+- **Global Budgeting**: Every chat cleanly captures and appends local token metadata strictly to the isolated `Message` document in the DB.
+- **Aggregation**: It executes an incredibly fast `$inc` query to update the overall `total_tokens_used` ceiling inside the parent `User` profile dynamically.
+- **Real-time UX**: During generation, the SSE handler cleanly bridges an `event: usage` packet immediately as the stream closes.
 
 ---
 
