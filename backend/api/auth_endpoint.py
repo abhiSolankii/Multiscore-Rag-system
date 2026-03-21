@@ -29,6 +29,7 @@ async def signup(user_in: UserCreate):
         "hashed_password": get_password_hash(user_in.password),
         "is_active": True,
         "total_tokens_used": 0,
+        "tokens_remaining": 100000,
         "config": user_in.config.model_dump(),
         "created_at": datetime.utcnow()
     }
@@ -37,12 +38,8 @@ async def signup(user_in: UserCreate):
     logger.info("New user registered: %s", user_in.email)
     logger.debug("New user created: id=%s email=%s", user_dict["_id"], user_in.email)
     
-    return {
-        "id": user_dict["_id"],
-        "email": user_dict["email"],
-        "is_active": user_dict["is_active"],
-        "created_at": user_dict["created_at"]
-    }
+    user_dict["id"] = user_dict.pop("_id")
+    return user_dict
 
 @router.post("/login", response_model=Token)
 async def login(user_in: UserLogin):

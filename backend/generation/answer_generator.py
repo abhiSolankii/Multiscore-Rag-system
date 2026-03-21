@@ -23,6 +23,7 @@ async def generate_rag_response(
     include_public: bool = False,
     mode: str = "hybrid",
     inactive_docs: List[str] | None = None,
+    max_token_limit: Optional[int] = None,
 ) -> Tuple[str, Optional[List[Dict]], Optional[dict]]:
     """
     Generate an answer, optionally augmented with retrieved context.
@@ -36,7 +37,7 @@ async def generate_rag_response(
     """
     if not settings.RAG_ENABLED:
         logger.debug("RAG disabled — using plain LLM for user %s", user_id)
-        content, usage = await generate_chat_response(conversation_history)
+        content, usage = await generate_chat_response(conversation_history, max_token_limit=max_token_limit)
         return content, [], usage
 
     # Retrieve context
@@ -61,7 +62,7 @@ async def generate_rag_response(
     if not context_chunks:
         logger.info("No context found for user %s — using plain LLM", user_id)
         messages = [{"role": "system", "content": PLAIN_SYSTEM_PROMPT}] + conversation_history
-        content, usage = await generate_chat_response(messages)
+        content, usage = await generate_chat_response(messages, max_token_limit=max_token_limit)
         return content, [], usage
 
     # Build context-augmented prompt
@@ -79,7 +80,7 @@ async def generate_rag_response(
         len(messages), len(conversation_history),
     )
 
-    content, usage = await generate_chat_response(messages)
+    content, usage = await generate_chat_response(messages, max_token_limit=max_token_limit)
     return content, context_chunks, usage
 
 
@@ -90,6 +91,7 @@ async def generate_rag_stream(
     include_public: bool = False,
     mode: str = "hybrid",
     inactive_docs: List[str] | None = None,
+    max_token_limit: Optional[int] = None,
 ):
     """
     Generate an answer via streaming, optionally augmented with retrieved context.
@@ -99,7 +101,7 @@ async def generate_rag_stream(
         logger.debug("RAG disabled — using plain LLM stream for user %s", user_id)
         yield {"type": "status", "step": "calling_llm"}
         yield {"type": "status", "step": "generating"}
-        async for chunk in generate_chat_stream(conversation_history):
+        async for chunk in generate_chat_stream(conversation_history, max_token_limit=max_token_limit):
             yield chunk
         return
 
@@ -133,7 +135,7 @@ async def generate_rag_stream(
         yield {"type": "status", "step": "calling_llm"}
         yield {"type": "status", "step": "generating"}
         messages = [{"role": "system", "content": PLAIN_SYSTEM_PROMPT}] + conversation_history
-        async for chunk in generate_chat_stream(messages):
+        async for chunk in generate_chat_stream(messages, max_token_limit=max_token_limit):
             yield chunk
         return
 
@@ -155,5 +157,5 @@ async def generate_rag_stream(
 
     yield {"type": "status", "step": "calling_llm"}
     yield {"type": "status", "step": "generating"}
-    async for chunk in generate_chat_stream(messages):
+    async for chunk in generate_chat_stream(messages, max_token_limit=max_token_limit):
         yield chunk

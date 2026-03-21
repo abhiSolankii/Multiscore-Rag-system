@@ -4,7 +4,6 @@ from datetime import datetime
 
 class UserConfig(BaseModel):
     enable_streaming: bool = True
-    default_mode: str = Field(default="hybrid", pattern="^(strict|hybrid)$")
     max_token_limit: Optional[int] = None
 
 class UserBase(BaseModel):
@@ -14,7 +13,8 @@ class UserBase(BaseModel):
 class UserCreate(UserBase):
     password: str = Field(..., min_length=8)
 
-class UserLogin(UserBase):
+class UserLogin(BaseModel):
+    email: EmailStr
     password: str
 
 class UserUpdate(BaseModel):
@@ -27,12 +27,14 @@ class UserInDB(UserBase):
     hashed_password: str
     is_active: bool = True
     total_tokens_used: int = 0
+    tokens_remaining: int = 100000
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
 class UserResponse(UserBase):
     id: str
     is_active: bool
     total_tokens_used: int = 0
+    tokens_remaining: int = 100000
     created_at: datetime
 
     class Config:

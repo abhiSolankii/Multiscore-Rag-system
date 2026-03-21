@@ -17,7 +17,7 @@ else:
 
 from typing import List, Dict, Tuple, Optional
 
-async def generate_chat_response(messages: List[Dict[str, str]]) -> Tuple[str, Optional[dict]]:
+async def generate_chat_response(messages: List[Dict[str, str]], max_token_limit: Optional[int] = None) -> Tuple[str, Optional[dict]]:
     """
     Generates a reply using OpenRouter LLM based on the conversation history.
     If no API key is provided, returns a mock development response.
@@ -33,10 +33,14 @@ async def generate_chat_response(messages: List[Dict[str, str]]) -> Tuple[str, O
             len(messages),
             [m["role"] for m in messages],
         )
-        response = await client.chat.completions.create(
-            model=settings.LLM_MODEL,
-            messages=messages,
-        )
+        kwargs = {
+            "model": settings.LLM_MODEL,
+            "messages": messages,
+        }
+        if max_token_limit:
+            kwargs["max_tokens"] = max_token_limit
+            
+        response = await client.chat.completions.create(**kwargs)
         content = response.choices[0].message.content
         usage = getattr(response, "usage", None)
         logger.debug(
@@ -50,7 +54,7 @@ async def generate_chat_response(messages: List[Dict[str, str]]) -> Tuple[str, O
         return f"[Error] Failed to generate response: {str(e)}", None
 
 
-async def generate_chat_stream(messages: List[Dict[str, str]]):
+async def generate_chat_stream(messages: List[Dict[str, str]], max_token_limit: Optional[int] = None):
     """
     Generates a streaming reply using OpenRouter LLM based on the conversation history.
     Outputs an AsyncGenerator yielding raw text chunks.
@@ -67,12 +71,16 @@ async def generate_chat_stream(messages: List[Dict[str, str]]):
             len(messages),
         )
         # We explicitly request a stream from the API, enabling token usage data
-        response_stream = await client.chat.completions.create(
-            model=settings.LLM_MODEL,
-            messages=messages,
-            stream=True,
-            stream_options={"include_usage": True},
-        )
+        kwargs = {
+            "model": settings.LLM_MODEL,
+            "messages": messages,
+            "stream": True,
+            "stream_options": {"include_usage": True},
+        }
+        if max_token_limit:
+            kwargs["max_tokens"] = max_token_limit
+            
+        response_stream = await client.chat.completions.create(**kwargs)
         
         async for chunk in response_stream:
             usage = getattr(chunk, "usage", None)

@@ -107,6 +107,18 @@ async def send_message(
     include_public = chat_config.get("include_public", False)
     mode = chat_config.get("mode", "hybrid")
     inactive_docs = chat_config.get("inactive_docs", [])
+    
+    user_config = current_user.get("config", {})
+    max_token_limit = user_config.get("max_token_limit")
+    
+    tokens_remaining = current_user.get("tokens_remaining", 100000)
+    if tokens_remaining <= 0:
+        raise HTTPException(
+            status_code=status.HTTP_402_PAYMENT_REQUIRED,
+            detail="Token quota exhausted. Please upgrade or refill your account."
+        )
+        
+    actual_max_tokens = min(max_token_limit, tokens_remaining) if max_token_limit else tokens_remaining
         
     # 2. Save user message
     user_message = {
@@ -150,6 +162,7 @@ async def send_message(
                     include_public=include_public,
                     mode=mode,
                     inactive_docs=inactive_docs,
+                    max_token_limit=actual_max_tokens,
                 ):
                     if chunk_data["type"] == "status":
                         status_payload = {"step": chunk_data["step"]}
@@ -175,6 +188,17 @@ async def send_message(
             finally:
                 # Guaranteed to execute even if client drops connection gracefully or ungracefully
                 if full_content.strip():
+                    if not tokens_used:
+                        import tiktoken
+                        try:
+                            enc = tiktoken.get_encoding("cl100k_base")
+                            prompt_tokens = sum(len(enc.encode(m["content"])) for m in llm_messages)
+                            output_tokens = len(enc.encode(full_content))
+                            tokens_used = {"total_tokens": prompt_tokens + output_tokens}
+                        except Exception as e:
+                            logger.error("Failed to estimate tokens for interrupted stream: %s", str(e))
+                            tokens_used = {"total_tokens": 0}
+
                     assistant_message = {
                         "chat_id": chat_id,
                         "role": "assistant",
@@ -188,9 +212,13 @@ async def send_message(
                     await db.chats.update_one({"_id": chat_obj_id}, {"$set": {"updated_at": datetime.utcnow()}})
                     
                     if tokens_used:
+                        tokens_delta = tokens_used.get("total_tokens", 0)
                         await db.users.update_one(
                             {"_id": current_user["_id"]},
-                            {"$inc": {"total_tokens_used": tokens_used.get("total_tokens", 0)}}
+                            {"$inc": {
+                                "total_tokens_used": tokens_delta,
+                                "tokens_remaining": -tokens_delta
+                            }}
                         )
                     
         return StreamingResponse(
@@ -210,6 +238,7 @@ async def send_message(
         include_public=include_public,
         mode=mode,
         inactive_docs=inactive_docs,
+        max_token_limit=actual_max_tokens,
     )
     
     # 6. Save assistant message
@@ -224,9 +253,13 @@ async def send_message(
     result = await db.messages.insert_one(assistant_message)
     
     if tokens_used:
+        tokens_delta = tokens_used.get("total_tokens", 0)
         await db.users.update_one(
             {"_id": current_user["_id"]},
-            {"$inc": {"total_tokens_used": tokens_used.get("total_tokens", 0)}}
+            {"$inc": {
+                "total_tokens_used": tokens_delta,
+                "tokens_remaining": -tokens_delta
+            }}
         )
     
     # 7. Update chat timestamp
