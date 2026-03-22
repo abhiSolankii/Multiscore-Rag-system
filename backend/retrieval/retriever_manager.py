@@ -43,6 +43,7 @@ async def retrieve(
     include_public: bool = False,
     inactive_docs: List[str] = None,
     top_k: int | None = None,
+    sub_queries: List[str] | None = None,
 ) -> List[Dict[str, Any]]:
     """
     Retrieve the most relevant chunks for a query.
@@ -64,67 +65,71 @@ async def retrieve(
         query, user_id, include_public, top_k,
     )
 
-    # 1. Embed query
+    # 1. Embed query (or sub-queries)
     embedder = get_embedder()
-    query_vector = await embedder.embed_one(query)
+    queries_to_embed = sub_queries if sub_queries else [query]
+    logger.debug("Embedding %d queries for retrieval", len(queries_to_embed))
+    query_vectors = await embedder.embed_many(queries_to_embed)
 
     # 2. Vector search — private collection
     private_collection = get_collection_name(user_id, is_public=False)
     candidates: List[Dict[str, Any]] = []
 
-    try:
-        private_results = await vector_search(
-            query_vector=query_vector,
-            collection_name=private_collection,
-            top_k=top_k * 3,
-            user_id=user_id,
-            is_public_collection=False,
-            inactive_docs=inactive_docs,
-        )
-        candidates.extend(private_results)
-        logger.debug(
-            "Private vector search: %d results from '%s'",
-            len(private_results), private_collection,
-        )
-        for i, r in enumerate(private_results):
-            logger.debug(
-                "  private[%d] score=%.4f | source=%s | chunk_index=%s | %.120s",
-                i,
-                r.get("score", 0),
-                r.get("metadata", {}).get("source", "?"),
-                r.get("metadata", {}).get("chunk_index", "?"),
-                r.get("content", ""),
+    for q_idx, query_vector in enumerate(query_vectors):
+        try:
+            private_results = await vector_search(
+                query_vector=query_vector,
+                collection_name=private_collection,
+                top_k=top_k * 3,
+                user_id=user_id,
+                is_public_collection=False,
+                inactive_docs=inactive_docs,
             )
-    except Exception as e:
-        logger.warning("Private collection '%s' not found or search failed: %s", private_collection, e)
+            candidates.extend(private_results)
+            logger.debug(
+                "Private vector search (query %d/%d): %d results from '%s'",
+                q_idx + 1, len(query_vectors), len(private_results), private_collection,
+            )
+            for i, r in enumerate(private_results):
+                logger.debug(
+                    "  private[%d] score=%.4f | source=%s | chunk_index=%s | %.120s",
+                    i,
+                    r.get("score", 0),
+                    r.get("metadata", {}).get("source", "?"),
+                    r.get("metadata", {}).get("chunk_index", "?"),
+                    r.get("content", ""),
+                )
+        except Exception as e:
+            logger.warning("Private collection '%s' not found or search failed: %s", private_collection, e)
 
     # 3. Optionally merge public collection results
     if include_public:
         public_collection = get_collection_name(user_id, is_public=True)
-        try:
-            public_results = await vector_search(
-                query_vector=query_vector,
-                collection_name=public_collection,
-                top_k=top_k * 2,
-                user_id=None,
-                is_public_collection=True,
-                inactive_docs=inactive_docs,
-            )
-            candidates.extend(public_results)
-            logger.debug(
-                "Public vector search: %d results from '%s'",
-                len(public_results), public_collection,
-            )
-            for i, r in enumerate(public_results):
-                logger.debug(
-                    "  public[%d] score=%.4f | source=%s | %.120s",
-                    i,
-                    r.get("score", 0),
-                    r.get("metadata", {}).get("source", "?"),
-                    r.get("content", ""),
+        for q_idx, query_vector in enumerate(query_vectors):
+            try:
+                public_results = await vector_search(
+                    query_vector=query_vector,
+                    collection_name=public_collection,
+                    top_k=top_k * 2,
+                    user_id=None,
+                    is_public_collection=True,
+                    inactive_docs=inactive_docs,
                 )
-        except Exception as e:
-            logger.warning("Public collection search failed: %s", e)
+                candidates.extend(public_results)
+                logger.debug(
+                    "Public vector search (query %d/%d): %d results from '%s'",
+                    q_idx + 1, len(query_vectors), len(public_results), public_collection,
+                )
+                for i, r in enumerate(public_results):
+                    logger.debug(
+                        "  public[%d] score=%.4f | source=%s | %.120s",
+                        i,
+                        r.get("score", 0),
+                        r.get("metadata", {}).get("source", "?"),
+                        r.get("content", ""),
+                    )
+            except Exception as e:
+                logger.warning("Public collection search failed: %s", e)
 
     if not candidates:
         logger.info("No candidates found for user %s", user_id)

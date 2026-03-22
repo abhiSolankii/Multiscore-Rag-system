@@ -32,6 +32,7 @@ You MUST follow these strict RAG parsing rules:
 Output format:
 - 3–5 bullet points (concise, non-redundant)
 - Then a short conclusion (2–3 lines)
+- All output MUST be beautifully formatted in Markdown.
 
 If the answer is completely missing from the context, strictly reply:
 "Not enough information in the provided sources."
@@ -48,6 +49,7 @@ You MUST follow these rules:
 - Prioritize answering using the provided context whenever possible.
 - If the context has gaps or does not cover the entire query, you may seamlessly supplement the answer using your own broader knowledge.
 - If you use the context, you MUST cite your sources by referencing the actual filename or URL, including the page number if provided (e.g., [Source: filename.pdf, Page 12]).
+- All output MUST be beautifully formatted in Markdown.
 
 Context:
 {context}
@@ -95,4 +97,4 @@ def build_rag_system_prompt(context_chunks: List[Dict[str, Any]], mode: str = "h
     return prompt_template.format(context=context_str)
 
 
-PLAIN_SYSTEM_PROMPT = "You are a helpful AI assistant. Respond to the user's query in a concise and helpful manner. The response should be in the same language as the query and under 200 words."
+PLAIN_SYSTEM_PROMPT = "You are a helpful AI assistant. Respond to the user's query in a concise and helpful manner. The response should be in the same language as the query and under 200 words. All output MUST be beautifully formatted in Markdown."

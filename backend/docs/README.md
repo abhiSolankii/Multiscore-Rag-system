@@ -32,7 +32,8 @@ LLM, Embedder and Vector DB are completely decoupled — swap any of them via `.
 - **Multi-source ingestion** — PDFs, web pages, entire GitHub repositories (async)
 - **Intelligent chunking** — recursive `tiktoken` (cl100k_base) splitter with strict token budget (default ~512 + 64 overlap)
 - **Dynamic collection mapping** — per-user + per-embedding-model collections (e.g. `user_123_baai_bge_small`)
-- **Hybrid Retrieval** — semantic vector search + BM25 keyword search + optional cross-encoder reranking
+- **Query Decomposition** — automated multi-query generation and routing to eliminate semantic dilution across heterogeneous topics
+- **Hybrid Retrieval** — parallel semantic vector queries + BM25 keyword search + optional cross-encoder reranking
 - **Vector segregation** — different embedding models → different collections (prevents dimension mismatch)
 
 ### ⚙️ User & Chat Configurations
@@ -121,13 +122,14 @@ Third-party loggers (`passlib`, `httpx`, etc.) are silenced to reduce noise.
 User message → /api/chats/{id}/messages/send
     ↓
 answer_generator.generate_rag_response() / generate_rag_stream()
+    ├─ Decompose Query (multi-query rewrite via LLM)
     ↓
 retriever_manager.retrieve()
-    ├─ Embed query (local HF or OpenAI)
-    ├─ Vector search (user private collection)
+    ├─ Embed ALL sub-queries (local HF or OpenAI)
+    ├─ Vector search loop (user private collection)
     ├─ Optional: vector search in public collection
-    ├─ Deduplicate (hash-based)
-    ├─ BM25 keyword search + Reciprocal Rank Fusion
+    ├─ Deduplicate (hash-based) over merged results
+    ├─ BM25 keyword search + Reciprocal Rank Fusion (against original query)
     └─ Optional: cross-encoder reranking
     ↓
 prompt_templates.build_rag_system_prompt()   # with citations

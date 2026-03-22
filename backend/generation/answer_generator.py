@@ -12,6 +12,7 @@ from core.logging import get_logger
 from generation.llm import generate_chat_response, generate_chat_stream
 from generation.prompt_templates import build_rag_system_prompt, PLAIN_SYSTEM_PROMPT
 from retrieval.retriever_manager import retrieve
+from retrieval.query_rewriter import decompose_query
 
 logger = get_logger(__name__)
 
@@ -40,6 +41,9 @@ async def generate_rag_response(
         content, usage = await generate_chat_response(conversation_history, max_token_limit=max_token_limit)
         return content, [], usage
 
+    # Decompose query
+    sub_queries, rewrite_usage = await decompose_query(query, max_token_limit=max_token_limit)
+
     # Retrieve context
     try:
         context_chunks = await retrieve(
@@ -47,6 +51,7 @@ async def generate_rag_response(
             user_id=user_id,
             include_public=include_public,
             inactive_docs=inactive_docs,
+            sub_queries=sub_queries,
         )
         logger.info(
             "Retrieved %d chunks for user %s (include_public=%s)",
@@ -78,6 +83,13 @@ async def generate_rag_response(
     )
 
     content, usage = await generate_chat_response(messages, max_token_limit=max_token_limit)
+    
+    if rewrite_usage:
+        if not usage:
+            usage = rewrite_usage
+        else:
+            usage["total_tokens"] = usage.get("total_tokens", 0) + rewrite_usage.get("total_tokens", 0)
+            
     return content, context_chunks, usage
 
 
@@ -102,14 +114,19 @@ async def generate_rag_stream(
             yield chunk
         return
 
+    # Decompose query
+    yield {"type": "status", "step": "rewriting_query", "meta": {"query": query}}
+    sub_queries, rewrite_usage = await decompose_query(query, max_token_limit=max_token_limit)
+
     # Retrieve context
-    yield {"type": "status", "step": "retrieving", "meta": {"query": query}}
+    yield {"type": "status", "step": "retrieving", "meta": {"query": query, "sub_queries": sub_queries}}
     try:
         context_chunks = await retrieve(
             query=query,
             user_id=user_id,
             include_public=include_public,
             inactive_docs=inactive_docs,
+            sub_queries=sub_queries,
         )
         yield {
             "type": "status", 
@@ -149,4 +166,6 @@ async def generate_rag_stream(
     yield {"type": "status", "step": "calling_llm"}
     yield {"type": "status", "step": "generating"}
     async for chunk in generate_chat_stream(messages, max_token_limit=max_token_limit):
+        if chunk.get("type") == "usage" and rewrite_usage:
+            chunk["total_tokens"] = chunk.get("total_tokens", 0) + rewrite_usage.get("total_tokens", 0)
         yield chunk
