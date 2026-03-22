@@ -118,7 +118,12 @@ async def send_message(
             detail="Token quota exhausted. Please upgrade or refill your account."
         )
         
-    actual_max_tokens = min(max_token_limit, tokens_remaining) if max_token_limit else tokens_remaining
+    if max_token_limit and max_token_limit > 0:
+        actual_max_tokens = min(max_token_limit, tokens_remaining)
+    else:
+        # Only cap standard requests if the user's remaining balance is dangerously low (< 8000 tokens).
+        # Otherwise, pass None, allowing OpenRouter to use the model's standard natural output limit.
+        actual_max_tokens = tokens_remaining if tokens_remaining < 8000 else None
         
     # 2. Save user message
     user_message = {

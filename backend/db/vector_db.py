@@ -25,7 +25,10 @@ def get_qdrant_client() -> AsyncQdrantClient:
     """Return the shared Qdrant async client."""
     global _client
     if _client is None:
-        kwargs: dict = {"url": settings.QDRANT_URL}
+        kwargs: dict = {
+            "url": settings.QDRANT_URL,
+            "timeout": 60.0,
+        }
         if settings.QDRANT_API_KEY:
             kwargs["api_key"] = settings.QDRANT_API_KEY
         _client = AsyncQdrantClient(**kwargs)
@@ -69,6 +72,12 @@ async def ensure_collection(collection_name: str, vector_size: int) -> None:
     await client.create_payload_index(
         collection_name=collection_name,
         field_name="user_id",
+        field_schema="keyword",
+    )
+    
+    await client.create_payload_index(
+        collection_name=collection_name,
+        field_name="document_id",
         field_schema="keyword",
     )
 

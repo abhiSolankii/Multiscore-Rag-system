@@ -60,10 +60,7 @@ async def generate_rag_response(
         context_chunks = []
 
     if not context_chunks:
-        logger.info("No context found for user %s — using plain LLM", user_id)
-        messages = [{"role": "system", "content": PLAIN_SYSTEM_PROMPT}] + conversation_history
-        content, usage = await generate_chat_response(messages, max_token_limit=max_token_limit)
-        return content, [], usage
+        logger.info("No context chunks retrieved for user %s. Proceeding with empty context.", user_id)
 
     # Build context-augmented prompt
     system_prompt = build_rag_system_prompt(context_chunks, mode=mode)
@@ -131,13 +128,7 @@ async def generate_rag_stream(
         context_chunks = []
 
     if not context_chunks:
-        logger.info("No context found for user %s stream — using plain LLM", user_id)
-        yield {"type": "status", "step": "calling_llm"}
-        yield {"type": "status", "step": "generating"}
-        messages = [{"role": "system", "content": PLAIN_SYSTEM_PROMPT}] + conversation_history
-        async for chunk in generate_chat_stream(messages, max_token_limit=max_token_limit):
-            yield chunk
-        return
+        logger.info("No context chunks retrieved for user %s stream. Proceeding with empty context.", user_id)
 
     # Build context-augmented prompt
     yield {"type": "status", "step": "building_context"}

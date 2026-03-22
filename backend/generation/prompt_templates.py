@@ -69,27 +69,28 @@ def build_rag_system_prompt(context_chunks: List[Dict[str, Any]], mode: str = "h
         Formatted system prompt string.
     """
     if not context_chunks:
-        return "You are a helpful AI assistant."
+        context_str = "No information found in the selected files."
+    else:
+        formatted_blocks: List[str] = []
+        for i, chunk in enumerate(context_chunks, start=1):
+            meta = chunk.get("metadata", {})
+            source = meta.get("source", "unknown")
+            src_type = meta.get("type", "unknown")
 
-    formatted_blocks: List[str] = []
-    for i, chunk in enumerate(context_chunks, start=1):
-        meta = chunk.get("metadata", {})
-        source = meta.get("source", "unknown")
-        src_type = meta.get("type", "unknown")
-
-        #Get metadata for every chunk
-        logger.debug("Chunk %d: %s", i, meta)
-        
-        # Append page number to the source string if available (mostly for PDFs)
-        if "page" in meta:
-            # Note: page is 0-indexed in PyPDF, so we add 1 for human readability
-            source = f"{source}, Page {meta['page'] + 1}"
+            #Get metadata for every chunk
+            logger.debug("Chunk %d: %s", i, meta)
             
-        content = chunk.get("content", "")
-        block = f"[Source: {source} | Type: {src_type}]\n{content}"
-        formatted_blocks.append(block)
+            # Append page number to the source string if available (mostly for PDFs)
+            if "page" in meta:
+                # Note: page is 0-indexed in PyPDF, so we add 1 for human readability
+                source = f"{source}, Page {meta['page'] + 1}"
+                
+            content = chunk.get("content", "")
+            block = f"[Source: {source} | Type: {src_type}]\n{content}"
+            formatted_blocks.append(block)
 
-    context_str = "\n\n---\n\n".join(formatted_blocks)
+        context_str = "\n\n---\n\n".join(formatted_blocks)
+        
     prompt_template = RAG_STRICT_PROMPT if mode == "strict" else RAG_HYBRID_PROMPT
     return prompt_template.format(context=context_str)
 

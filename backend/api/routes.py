@@ -7,8 +7,5 @@ router = APIRouter()
 async def read_users_me(current_user: dict = Depends(get_current_user)):
     # Return user info without the hashed password
     return {
-        "id": current_user["_id"],
-        "email": current_user["email"],
-        "is_active": current_user["is_active"],
-        "created_at": current_user["created_at"]
+        "user": current_user
     }
