@@ -48,6 +48,7 @@ class Settings(BaseSettings):
     # Retrieval
     RETRIEVAL_TOP_K: int = 5
     HYBRID_SEARCH_ENABLED: bool = True
+    REWRITE_TOKEN_CAP: int = 200
 
     # File storage
     UPLOAD_DIR: str = "./uploads"

@@ -63,7 +63,8 @@ Every stored chunk includes exact origin footprints:
   "is_public": false
 }
 ```
-→ **Upfront Loading**: For peak frontend UI rendering, the *exact chunks* used by the RAG search are yielded inside the SSE stream instantly (`event: status`, `data: {"step": "retrieved", "meta": {"chunks": [...]}}`) BEFORE the LLM begins streaming text. Frontends can instantly mount interactive modals or PDF viewer URLs cleanly.
+→ **Upfront Loading**: For peak frontend UI rendering, the *exact chunks* used by the RAG search are yielded inside the SSE stream instantly (`event: status`, `data: {"step": "retrieved", "meta": {"chunks": [...]}}`) BEFORE the LLM begins streaming text. 
+→ **Index-Based Citation Mapping**: To eliminate LLM hallucinations and reduce token overhead, the backend labels context chunks as `[[Chunk 1]]`, `[[Chunk 2]]`, etc. The assistant is strictly commanded to cite using only these tokens. Frontends can then use the order of the `chunks` array from the `retrieved` event to map these tokens back to rich metadata (PDF source, page numbers, etc.) for interactive UI elements.
 
 ### 📊 Token Metrics & Cost Tracking
 - **API Transparency**: `generate_chat_stream` automatically invokes `$stream_options` to boldly capture exact OpenRouter/OpenAI token counts (`prompt_tokens`, `completion_tokens`).

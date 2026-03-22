@@ -110,6 +110,13 @@ async def send_message(
     
     user_config = current_user.get("config", {})
     max_token_limit = user_config.get("max_token_limit")
+    chat_char_limit = user_config.get("chat_char_limit", 1500)
+    
+    if len(message_in.content) > chat_char_limit:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Message exceeds the {chat_char_limit} characters limit.",
+        )
     
     tokens_remaining = current_user.get("tokens_remaining", 100000)
     if tokens_remaining <= 0:

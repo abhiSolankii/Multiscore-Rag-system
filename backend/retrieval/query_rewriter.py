@@ -2,6 +2,7 @@ from typing import List, Tuple
 import json
 import re
 
+from core.config import settings
 from core.logging import get_logger
 from generation.llm import generate_chat_response
 
@@ -26,7 +27,7 @@ User: "Tell me about climate change."
 Output: ["What is climate change?"]
 """
 
-async def decompose_query(query: str, max_token_limit: int | None = None) -> Tuple[List[str], dict]:
+async def decompose_query(query: str) -> Tuple[List[str], dict]:
     """
     Decompose a complex user query into multiple sub-queries using the LLM.
     Returns a list of string sub-queries.
@@ -40,9 +41,8 @@ async def decompose_query(query: str, max_token_limit: int | None = None) -> Tup
     
     try:
         # Ask LLM for the decomposed queries
-        # We don't want a huge response, so we cap max_tokens low to save quota if limit is unconstrained
-        capped_limit = 200
-        response_text, _ = await generate_chat_response(messages, max_token_limit=capped_limit)
+        # We don't want a huge response, so we bound it strictly
+        response_text, usage = await generate_chat_response(messages, max_token_limit=settings.REWRITE_TOKEN_CAP)
         
         # Clean the output in case the LLM returned markdown code blocks
         clean_text = response_text.strip()

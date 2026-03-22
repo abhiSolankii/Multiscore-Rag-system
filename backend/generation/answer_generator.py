@@ -17,6 +17,14 @@ from retrieval.query_rewriter import decompose_query
 logger = get_logger(__name__)
 
 
+# ── Helpers ─────────────────────────────────────────────────────────────────
+
+async def _decompose_query_step(query: str) -> Tuple[List[str], dict]:
+    """Helper to handle query decomposition."""
+    return await decompose_query(query)
+
+# ── Main Generator Functions ───────────────────────────────────────────────
+
 async def generate_rag_response(
     query: str,
     conversation_history: List[Dict[str, str]],
@@ -42,7 +50,7 @@ async def generate_rag_response(
         return content, [], usage
 
     # Decompose query
-    sub_queries, rewrite_usage = await decompose_query(query, max_token_limit=max_token_limit)
+    sub_queries, rewrite_usage = await _decompose_query_step(query, stream=False)
 
     # Retrieve context
     try:
@@ -89,6 +97,8 @@ async def generate_rag_response(
             usage = rewrite_usage
         else:
             usage["total_tokens"] = usage.get("total_tokens", 0) + rewrite_usage.get("total_tokens", 0)
+            usage["prompt_tokens"] = usage.get("prompt_tokens", 0) + rewrite_usage.get("prompt_tokens", 0)
+            usage["completion_tokens"] = usage.get("completion_tokens", 0) + rewrite_usage.get("completion_tokens", 0)
             
     return content, context_chunks, usage
 
@@ -116,7 +126,7 @@ async def generate_rag_stream(
 
     # Decompose query
     yield {"type": "status", "step": "rewriting_query", "meta": {"query": query}}
-    sub_queries, rewrite_usage = await decompose_query(query, max_token_limit=max_token_limit)
+    sub_queries, rewrite_usage = await _decompose_query_step(query)
 
     # Retrieve context
     yield {"type": "status", "step": "retrieving", "meta": {"query": query, "sub_queries": sub_queries}}
@@ -168,4 +178,6 @@ async def generate_rag_stream(
     async for chunk in generate_chat_stream(messages, max_token_limit=max_token_limit):
         if chunk.get("type") == "usage" and rewrite_usage:
             chunk["total_tokens"] = chunk.get("total_tokens", 0) + rewrite_usage.get("total_tokens", 0)
+            chunk["prompt_tokens"] = chunk.get("prompt_tokens", 0) + rewrite_usage.get("prompt_tokens", 0)
+            chunk["completion_tokens"] = chunk.get("completion_tokens", 0) + rewrite_usage.get("completion_tokens", 0)
         yield chunk

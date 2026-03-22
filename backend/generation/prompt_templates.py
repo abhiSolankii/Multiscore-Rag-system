@@ -23,11 +23,9 @@ RAG_STRICT_PROMPT = """\
 You are a precise and analytical AI assistant.
 
 You MUST follow these strict RAG parsing rules:
-- Answer ONLY using the provided context. Do NOT supplement with outside knowledge.
-- DO NOT repeat the same idea in different words
-- Merge similar points into a single concise statement
 - Avoid redundancy completely
-- Always cite your sources by referencing the actual filename or URL, including the page number if provided (e.g., [Source: filename.pdf, Page 12]).
+- Always cite your sources by using the format [[Chunk N]] for every piece of information used.
+- Place citations at the end of the sentence or bullet point.
 
 Output format:
 - 3–5 bullet points (concise, non-redundant)
@@ -48,7 +46,7 @@ You have been provided with specific contextual knowledge below.
 You MUST follow these rules:
 - Prioritize answering using the provided context whenever possible.
 - If the context has gaps or does not cover the entire query, you may seamlessly supplement the answer using your own broader knowledge.
-- If you use the context, you MUST cite your sources by referencing the actual filename or URL, including the page number if provided (e.g., [Source: filename.pdf, Page 12]).
+- If you use the context, you MUST cite your sources by using the format [[Chunk N]].
 - All output MUST be beautifully formatted in Markdown.
 
 Context:
@@ -82,13 +80,8 @@ def build_rag_system_prompt(context_chunks: List[Dict[str, Any]], mode: str = "h
             #Get metadata for every chunk
             logger.debug("Chunk %d: %s", i, meta)
             
-            # Append page number to the source string if available (mostly for PDFs)
-            if "page" in meta:
-                # Note: page is 0-indexed in PyPDF, so we add 1 for human readability
-                source = f"{source}, Page {meta['page'] + 1}"
-                
             content = chunk.get("content", "")
-            block = f"[Source: {source} | Type: {src_type}]\n{content}"
+            block = f"[[Chunk {i}]]\n{content}"
             formatted_blocks.append(block)
 
         context_str = "\n\n---\n\n".join(formatted_blocks)

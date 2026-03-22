@@ -5,6 +5,7 @@ from datetime import datetime
 class UserConfig(BaseModel):
     enable_streaming: bool = True
     max_token_limit: Optional[int] = None
+    chat_char_limit: int = 1500
 
 class UserBase(BaseModel):
     email: EmailStr
