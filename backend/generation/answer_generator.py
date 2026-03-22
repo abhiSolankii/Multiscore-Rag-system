@@ -50,7 +50,7 @@ async def generate_rag_response(
         return content, [], usage
 
     # Decompose query
-    sub_queries, rewrite_usage = await _decompose_query_step(query, stream=False)
+    sub_queries, rewrite_usage = await _decompose_query_step(query)
 
     # Retrieve context
     try:
