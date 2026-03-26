@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom';
-import { MessageSquare, Clock, ArrowRight, Globe, Lock } from 'lucide-react';
+import { MessageSquare, Clock, ArrowRight, Globe, Lock, Trash2 } from 'lucide-react';
 
 const modeColors = {
   strict: 'bg-red-900/40 text-red-400 border-red-800/60',
@@ -11,9 +11,14 @@ const formatDate = (dateStr) => {
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 };
 
-const ChatCard = ({ chat }) => {
+const ChatCard = ({ chat, onDelete }) => {
   const navigate = useNavigate();
   const config = chat.config || {};
+
+  const handleDelete = (e) => {
+    e.stopPropagation();
+    onDelete(chat._id, chat.title);
+  };
 
   return (
     <div className="group flex flex-col justify-between bg-gray-900 border border-gray-800 hover:border-indigo-500/40 rounded-xl p-4 transition-all duration-200 hover:shadow-lg hover:shadow-indigo-900/10">
@@ -25,9 +30,18 @@ const ChatCard = ({ chat }) => {
           </div>
           <h3 className="text-sm font-semibold text-white truncate">{chat.title}</h3>
         </div>
-        <span className={`shrink-0 text-xs px-2 py-0.5 rounded-full border capitalize ${modeColors[config.mode] || modeColors.hybrid}`}>
-          {config.mode || 'hybrid'}
-        </span>
+        <div className="flex items-center gap-1.5 shrink-0">
+          <span className={`text-xs px-2 py-0.5 rounded-full border capitalize ${modeColors[config.mode] || modeColors.hybrid}`}>
+            {config.mode || 'hybrid'}
+          </span>
+          <button
+            onClick={handleDelete}
+            className="p-1 text-gray-600 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-all rounded"
+            title="Delete chat"
+          >
+            <Trash2 size={13} />
+          </button>
+        </div>
       </div>
 
       {/* Meta */}

@@ -98,6 +98,29 @@ async def update_chat(
     updated_chat["_id"] = str(updated_chat["_id"])
     return updated_chat
 
+@router.delete("/{chat_id}", status_code=status.HTTP_200_OK)
+async def delete_chat(
+    chat_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """Delete a chat and all its messages. Only the owner can delete."""
+    db = get_database()
+    try:
+        chat_obj_id = ObjectId(chat_id)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid chat ID format")
+
+    chat = await db.chats.find_one({"_id": chat_obj_id})
+    #Verify ownership
+    isOwner = chat["user_id"] == current_user["_id"]
+    if not isOwner and current_user["role"] != "admin":
+        raise HTTPException(status_code=403, detail="You are not the owner of this chat or admin")
+
+    await db.chats.delete_one({"_id": chat_obj_id})
+    await db.messages.delete_many({"chat_id": chat_id})
+    logger.info("Chat deleted: id=%s user=%s", chat_id, current_user["_id"])
+    return {"message": "Chat deleted"}
+
 @router.post("/{chat_id}/messages/send")
 async def send_message(
     chat_id: str,

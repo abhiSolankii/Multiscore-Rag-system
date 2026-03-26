@@ -1,12 +1,13 @@
 import { useEffect, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { Plus, Search, MessageSquare } from 'lucide-react';
-import { getChats } from '../api/chat';
-import { setChats, addChat, selectChats } from '../store/chatSlice';
+import { getChats, deleteChat } from '../api/chat';
+import { setChats, addChat, removeChatFromList, selectChats } from '../store/chatSlice';
 import ChatCard from '../components/chat/ChatCard';
 import CreateChatModal from '../components/chat/CreateChatModal';
 import { handleError } from '../utils/errorHandler';
 import { useNavigate } from 'react-router-dom';
+import toast from 'react-hot-toast';
 
 const ChatsPage = () => {
   const dispatch = useDispatch();
@@ -41,6 +42,17 @@ const ChatsPage = () => {
   const handleCreated = (chat) => {
     dispatch(addChat(chat));
     navigate(`/chats/${chat._id}`);
+  };
+
+  const handleDelete = async (chatId, title) => {
+    if (!window.confirm(`Delete "${title}"? This cannot be undone.`)) return;
+    try {
+      await deleteChat(chatId);
+      dispatch(removeChatFromList(chatId));
+      toast.success(`"${title}" deleted.`);
+    } catch (err) {
+      handleError(err);
+    }
   };
 
   return (
@@ -96,7 +108,7 @@ const ChatsPage = () => {
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
             {filtered.map((chat) => (
-              <ChatCard key={chat._id} chat={chat} />
+              <ChatCard key={chat._id} chat={chat} onDelete={handleDelete} />
             ))}
           </div>
         )}
