@@ -4,7 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from db import connect_to_mongo, close_mongo_connection
 from core import settings, setup_logging
 from core.logging import get_logger
-from api import auth_router, user_router, chat_router, ingestion_router
+from api import auth_router, user_router, chat_router, ingestion_router, admin_router
 
 # ── Logging — must be first ───────────────────────────────────────────────────
 setup_logging()
@@ -58,6 +58,7 @@ app.include_router(auth_router,      prefix="/api/auth",   tags=["auth"])
 app.include_router(user_router,      prefix="/api/users",  tags=["users"])
 app.include_router(chat_router,      prefix="/api/chats",  tags=["chats"])
 app.include_router(ingestion_router, prefix="/api/ingest", tags=["ingestion"])
+app.include_router(admin_router,     prefix="/api/admin",  tags=["admin"])
 
 @app.get("/")
 async def root():

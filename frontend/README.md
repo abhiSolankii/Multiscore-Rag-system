@@ -58,7 +58,11 @@ src/
 │   ├── client.js          # Axios instance — Bearer token injection + 401 refresh interceptor
 │   ├── auth.js            # login, signup, getMe, updateMe
 │   ├── chat.js            # createChat, getChats, updateChat, getMessages, sendMessage, sendMessageStream
-│   └── ingestion.js       # ingestFile, ingestUrl, ingestGithub, pollStatus, listDocuments, deleteDocument
+│   ├── ingestion.js       # ingestFile, ingestUrl, ingestGithub, pollStatus, listDocuments, deleteDocument
+│   └── admin.js           # listUsers, getAdminUser, updateAdminUser, listAllDocuments, deleteAnyDocument
+│
+├── constants/
+│   └── app.js             # APP_NAME, APP_TAGLINE — single source of truth for branding
 │
 ├── store/
 │   ├── index.js           # Redux store root
@@ -80,7 +84,7 @@ src/
 ├── components/
 │   ├── layout/
 │   │   ├── AppLayout.jsx  # Shell — sidebar + main outlet + auth:logout event listener
-│   │   └── Sidebar.jsx    # Collapsible navigation sidebar with Ant tooltips
+│   │   └── Sidebar.jsx    # Collapsible nav — shows Admin link only when user.is_admin is true
 │   └── chat/
 │       ├── ChatCard.jsx         # Chat card with mode badge, date, continue button
 │       ├── CreateChatModal.jsx  # New chat modal — title, mode, include_public
@@ -97,8 +101,9 @@ src/
     │   └── SignupPage.jsx
     ├── ChatsPage.jsx       # Chat grid with search + mode filter + create modal
     ├── ChatPage.jsx        # Active chat — dual streaming/non-streaming message flow
-    ├── IngestPage.jsx      # PDF / URL / GitHub ingestion + status polling + document table
+    ├── IngestPage.jsx      # PDF / URL / GitHub ingestion + status polling + doc table (public/private split)
     ├── SettingsPage.jsx    # Account info + editable preferences
+    ├── AdminPage.jsx       # Admin dashboard — user management + all documents (admin only)
     └── NotFoundPage.jsx
 ```
 
@@ -114,7 +119,10 @@ src/
 | `/chats/:chatId` | Protected | Active chat screen |
 | `/ingest` | Protected | Data ingestion and document management |
 | `/settings` | Protected | User preferences |
+| `/admin` | Protected (admin only) | Admin dashboard |
 | `*` | Public | 404 Not Found |
+
+> The `/admin` route is accessible to any authenticated user who navigates to it directly. The sidebar link is hidden for non-admins. For server-side enforcement, the backend's `require_admin` dependency blocks all `/api/admin/*` calls for non-admin users.
 
 ---
 
@@ -159,8 +167,42 @@ src/
 - **PDF**: `POST /api/ingest/file` (multipart form)
 - **URL**: `POST /api/ingest/url`
 - **GitHub**: `POST /api/ingest/github`
-- After submit, `task_id` is polled every 3 seconds via `GET /api/ingest/status/:taskId`
-- On completion → toast + document list refreshes
+- After submit, `task_id` is stored in session-only `pendingJobs` state and polled every **5 seconds** via `GET /api/ingest/status/:taskId`
+- When status returns `"done"` or `"failed"` → toast + document list refreshes + job removed from polling
+- On page reload: `pendingJobs` resets (session-only), but the document list API returns each doc's `status` field. If any doc has `status !== "done"`, a yellow warning appears next to the refresh button
+- Documents are shown in two sections: **Private** and **Public**
+
+### Admin System
+- Users with `is_admin: true` in the database see an **Admin** nav link in the sidebar (orange accent)
+- `AdminPage` (`/admin`) shows:
+  - All users with email, token balance, active/admin badges
+  - **Edit** button → modal to update `tokens_remaining`, `total_tokens_used`, `is_active`, `is_admin`, and `config` fields
+  - All documents across all users (collapsible) with delete button
+- All admin API calls go to `/api/admin/*` — blocked server-side for non-admins
+- To promote a user to admin: `db.users.updateOne({ email: "you@email.com" }, { $set: { is_admin: true } })`
+
+---
+
+## App Branding
+
+App name is controlled from one place:
+```js
+// src/constants/app.js
+export const APP_NAME = 'Multiscore RAG';
+```
+Used in: tab title (`document.title` in App.jsx + `index.html`), Sidebar logo text, Login and Signup page subtitles.
+
+The tab icon (`/public/favicon.svg`) is also used as the sidebar logo — same asset, consistent branding.
+
+---
+
+## Ant Design Dark Theme
+
+`App.jsx` wraps the entire app in Ant Design's `ConfigProvider` with `theme.darkAlgorithm`. This ensures all Ant components (Modal, Select, Switch, Tabs, Tooltip) render with a dark background matching the app's color palette — no white flash on modals or dropdowns.
+
+```js
+<ConfigProvider theme={{ algorithm: theme.darkAlgorithm, token: { colorPrimary: '#6366f1', ... } }}>
+```
 
 ---
 
@@ -178,7 +220,7 @@ src/
 ```js
 // auth slice
 {
-  user: { _id, email, config, tokens_remaining, total_tokens_used },
+  user: { _id, email, is_admin, config, tokens_remaining, total_tokens_used },
   token: "jwt_access_token",
   isLoading: false
 }
@@ -219,7 +261,7 @@ The frontend expects these backend endpoints to exist:
 | POST | `/api/auth/login` | Returns `{ access_token, refresh_token }` |
 | POST | `/api/auth/signup` | Creates user |
 | POST | `/api/auth/refresh` | Accepts `{ refresh_token }`, returns new tokens |
-| GET | `/api/users/me` | Returns `{ user }` |
+| GET | `/api/users/me` | Returns `{ user }` with `is_admin` field |
 | PATCH | `/api/users/me` | Updates user config |
 | GET | `/api/chats/list` | Returns chat array |
 | POST | `/api/chats/create` | Creates chat |
@@ -230,8 +272,13 @@ The frontend expects these backend endpoints to exist:
 | POST | `/api/ingest/file` | Multipart PDF upload |
 | POST | `/api/ingest/url` | URL ingestion |
 | POST | `/api/ingest/github` | GitHub repo ingestion |
-| GET | `/api/ingest/status/:taskId` | Job status poll |
-| GET | `/api/ingest/documents` | List documents |
+| GET | `/api/ingest/status/:taskId` | Returns `{ status: "done" \| "pending" \| "failed" }` |
+| GET | `/api/ingest/documents` | List documents with `status` and `is_public` fields |
 | DELETE | `/api/ingest/document/:docId` | Delete document + vectors |
+| GET | `/api/admin/users` | Admin: list all users |
+| PATCH | `/api/admin/users/:id` | Admin: edit user |
+| GET | `/api/admin/documents` | Admin: list all documents |
+| DELETE | `/api/admin/documents/:docId` | Admin: delete any document |
 
 > Make sure `http://localhost:5173` is in your backend's CORS allowed origins.
+

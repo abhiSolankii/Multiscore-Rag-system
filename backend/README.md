@@ -29,6 +29,16 @@ LLM, Embedder and Vector DB are completely decoupled — swap any of them via `.
 
 - JWT-based authentication with short-lived access tokens and long-lived refresh tokens
 - Protected routes via FastAPI dependency injection / middleware
+- `is_admin` flag on every user (default `False`) — elevate manually in MongoDB to grant admin access
+
+### 👑 Admin System
+
+- **`GET /api/admin/users`** — list all users (passwords excluded)
+- **`PATCH /api/admin/users/:id`** — edit any user's `tokens_remaining`, `total_tokens_used`, `is_active`, `is_admin`, and `config`. Email and password are protected from this endpoint.
+- **`GET /api/admin/documents`** — list all documents across all users
+- **`DELETE /api/admin/documents/:id`** — delete any document
+- All admin routes are guarded by `require_admin` dependency — returns `403` for any user without `is_admin: true`
+- To promote a user: `db.users.updateOne({ email: "..." }, { $set: { is_admin: true } })`
 
 ### 🗄️ Ingestion & RAG Pipeline
 
@@ -87,7 +97,7 @@ Every stored chunk includes exact origin footprints:
 
 ```text
 backend/
-├── api/                    # Routers: auth, chat, ingestion
+├── api/                    # Routers: auth, chat, ingestion, admin
 ├── core/                   # Security, config (Pydantic), logging setup
 ├── db/                     # MongoDB client + Qdrant connector
 ├── schemas/                # All Pydantic models (request/response)

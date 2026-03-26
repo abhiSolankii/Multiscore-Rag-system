@@ -7,13 +7,19 @@ import {
   LogOut,
   ChevronLeft,
   ChevronRight,
-  Brain,
+  Shield,
 } from 'lucide-react';
+import { Tooltip } from 'antd';
 import { logout } from '../../store/authSlice';
 import useAuth from '../../hooks/useAuth';
-import { Tooltip } from 'antd';
+import { APP_NAME } from '../../constants/app';
 
-const navItems = [
+// Custom logo using the same favicon SVG as the tab icon
+const Logo = ({ size = 22 }) => (
+  <img src="/favicon.svg" alt={APP_NAME} width={size} height={size} className="shrink-0" />
+);
+
+const baseNavItems = [
   { to: '/chats', icon: MessageSquare, label: 'Chats' },
   { to: '/ingest', icon: Upload, label: 'Ingest' },
   { to: '/settings', icon: Settings, label: 'Settings' },
@@ -23,6 +29,10 @@ const Sidebar = ({ collapsed, setCollapsed }) => {
   const dispatch = useDispatch();
   const navigate = useNavigate();
   const { user } = useAuth();
+
+  const navItems = user?.is_admin
+    ? [...baseNavItems, { to: '/admin', icon: Shield, label: 'Admin', admin: true }]
+    : baseNavItems;
 
   const handleLogout = () => {
     dispatch(logout());
@@ -37,17 +47,17 @@ const Sidebar = ({ collapsed, setCollapsed }) => {
     >
       {/* Logo / Brand */}
       <div className="flex items-center h-16 px-4 border-b border-gray-800 shrink-0">
-        <Brain size={22} className="text-indigo-400 shrink-0" />
+        <Logo size={22} />
         {!collapsed && (
           <span className="ml-3 font-bold text-white text-sm tracking-wide truncate">
-            Multiscore RAG
+            {APP_NAME}
           </span>
         )}
       </div>
 
       {/* Nav Links */}
       <nav className="flex-1 py-4 space-y-1 px-2 overflow-hidden">
-        {navItems.map(({ to, icon: Icon, label }) => {
+        {navItems.map(({ to, icon: Icon, label, admin }) => {
           const link = (
             <NavLink
               key={to}
@@ -55,7 +65,11 @@ const Sidebar = ({ collapsed, setCollapsed }) => {
               className={({ isActive }) =>
                 `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
                   isActive
-                    ? 'bg-indigo-600 text-white'
+                    ? admin
+                      ? 'bg-orange-600 text-white'
+                      : 'bg-indigo-600 text-white'
+                    : admin
+                    ? 'text-orange-400 hover:bg-orange-900/30 hover:text-orange-300'
                     : 'text-gray-400 hover:bg-gray-800 hover:text-white'
                 }`
               }
@@ -77,7 +91,14 @@ const Sidebar = ({ collapsed, setCollapsed }) => {
       {/* User info + Logout */}
       <div className="border-t border-gray-800 p-3 space-y-2 shrink-0">
         {!collapsed && user && (
-          <p className="text-xs text-gray-500 truncate px-1">{user.email}</p>
+          <div>
+            <p className="text-xs text-gray-500 truncate px-1">{user.email}</p>
+            {user.is_admin && (
+              <p className="text-xs text-orange-400 px-1 flex items-center gap-1 mt-0.5">
+                <Shield size={10} /> Admin
+              </p>
+            )}
+          </div>
         )}
         <Tooltip title={collapsed ? 'Logout' : ''} placement="right">
           <button

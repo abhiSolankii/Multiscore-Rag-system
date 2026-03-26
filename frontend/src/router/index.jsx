@@ -7,6 +7,7 @@ import ChatsPage from '../pages/ChatsPage';
 import ChatPage from '../pages/ChatPage';
 import IngestPage from '../pages/IngestPage';
 import SettingsPage from '../pages/SettingsPage';
+import AdminPage from '../pages/AdminPage';
 import NotFoundPage from '../pages/NotFoundPage';
 
 const AppRouter = () => (
@@ -23,6 +24,7 @@ const AppRouter = () => (
           <Route path="/chats/:chatId" element={<ChatPage />} />
           <Route path="/ingest" element={<IngestPage />} />
           <Route path="/settings" element={<SettingsPage />} />
+          <Route path="/admin" element={<AdminPage />} />
         </Route>
       </Route>
 

@@ -28,6 +28,7 @@ async def signup(user_in: UserCreate):
         "email": user_in.email,
         "hashed_password": get_password_hash(user_in.password),
         "is_active": True,
+        "is_admin": False,
         "total_tokens_used": 0,
         "tokens_remaining": 100000,
         "config": user_in.config.model_dump(),

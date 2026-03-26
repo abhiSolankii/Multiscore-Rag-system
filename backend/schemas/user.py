@@ -27,6 +27,7 @@ class UserInDB(UserBase):
     id: str = Field(..., alias="_id")
     hashed_password: str
     is_active: bool = True
+    is_admin: bool = False
     total_tokens_used: int = 0
     tokens_remaining: int = 100000
     created_at: datetime = Field(default_factory=datetime.utcnow)
@@ -34,6 +35,7 @@ class UserInDB(UserBase):
 class UserResponse(UserBase):
     id: str
     is_active: bool
+    is_admin: bool = False
     total_tokens_used: int = 0
     tokens_remaining: int = 100000
     created_at: datetime

@@ -4,6 +4,7 @@ import toast from 'react-hot-toast';
 import { Brain, Mail, Lock, Loader2 } from 'lucide-react';
 import { signup } from '../../api/auth';
 import { handleError } from '../../utils/errorHandler';
+import { APP_NAME } from '../../constants/app';
 
 const SignupPage = () => {
   const navigate = useNavigate();
@@ -39,7 +40,7 @@ const SignupPage = () => {
             </div>
           </div>
           <h1 className="text-2xl font-bold text-white">Create an account</h1>
-          <p className="text-sm text-gray-400 mt-1">Start using Multiscore RAG</p>
+          <p className="text-sm text-gray-400 mt-1">Start using {APP_NAME}</p>
         </div>
 
         {/* Form */}

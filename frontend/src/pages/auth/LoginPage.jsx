@@ -7,6 +7,7 @@ import { login } from '../../api/auth';
 import { setCredentials } from '../../store/authSlice';
 import { setRefreshToken } from '../../utils/token';
 import { handleError } from '../../utils/errorHandler';
+import { APP_NAME } from '../../constants/app';
 
 const LoginPage = () => {
   const dispatch = useDispatch();
@@ -41,7 +42,7 @@ const LoginPage = () => {
             </div>
           </div>
           <h1 className="text-2xl font-bold text-white">Welcome back</h1>
-          <p className="text-sm text-gray-400 mt-1">Sign in to Multiscore RAG</p>
+          <p className="text-sm text-gray-400 mt-1">Sign in to {APP_NAME}</p>
         </div>
 
         {/* Form */}
