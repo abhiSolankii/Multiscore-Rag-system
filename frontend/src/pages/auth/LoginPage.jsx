@@ -1,18 +1,18 @@
-import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { useDispatch } from 'react-redux';
-import toast from 'react-hot-toast';
-import { Brain, Mail, Lock, Loader2 } from 'lucide-react';
-import { login } from '../../api/auth';
-import { setCredentials } from '../../store/authSlice';
-import { setRefreshToken } from '../../utils/token';
-import { handleError } from '../../utils/errorHandler';
-import { APP_NAME } from '../../constants/app';
+import { Brain, Loader2, Lock, Mail } from "lucide-react";
+import { useState } from "react";
+import toast from "react-hot-toast";
+import { useDispatch } from "react-redux";
+import { Link, useNavigate } from "react-router-dom";
+import { getMe, login } from "../../api/auth";
+import { APP_NAME } from "../../constants/app";
+import { setCredentials, setUser } from "../../store/authSlice";
+import { handleError } from "../../utils/errorHandler";
+import { setRefreshToken } from "../../utils/token";
 
 const LoginPage = () => {
   const dispatch = useDispatch();
   const navigate = useNavigate();
-  const [form, setForm] = useState({ email: '', password: '' });
+  const [form, setForm] = useState({ email: "", password: "" });
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (e) => {
@@ -20,10 +20,20 @@ const LoginPage = () => {
     setLoading(true);
     try {
       const data = await login(form.email, form.password);
-      dispatch(setCredentials({ access_token: data.access_token, refresh_token: data.refresh_token, user: null }));
+      // Store tokens first so the Axios interceptor can attach them for /me
+      dispatch(
+        setCredentials({
+          access_token: data.access_token,
+          refresh_token: data.refresh_token,
+          user: null,
+        }),
+      );
       setRefreshToken(data.refresh_token);
-      toast.success('Welcome back!');
-      navigate('/chats', { replace: true });
+      // Immediately fetch full user profile (includes is_admin, config, etc.)
+      const user = await getMe();
+      dispatch(setUser(user));
+      toast.success("Welcome back!");
+      navigate("/chats", { replace: true });
     } catch (err) {
       handleError(err);
     } finally {
@@ -48,9 +58,14 @@ const LoginPage = () => {
         {/* Form */}
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-xs font-medium text-gray-400 mb-1.5">Email</label>
+            <label className="block text-xs font-medium text-gray-400 mb-1.5">
+              Email
+            </label>
             <div className="relative">
-              <Mail size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
+              <Mail
+                size={16}
+                className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500"
+              />
               <input
                 type="email"
                 required
@@ -63,9 +78,14 @@ const LoginPage = () => {
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-gray-400 mb-1.5">Password</label>
+            <label className="block text-xs font-medium text-gray-400 mb-1.5">
+              Password
+            </label>
             <div className="relative">
-              <Lock size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
+              <Lock
+                size={16}
+                className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500"
+              />
               <input
                 type="password"
                 required
@@ -83,12 +103,12 @@ const LoginPage = () => {
             className="w-full flex items-center justify-center gap-2 py-2.5 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-60 disabled:cursor-not-allowed text-white text-sm font-medium rounded-lg transition-colors"
           >
             {loading ? <Loader2 size={16} className="animate-spin" /> : null}
-            {loading ? 'Signing in...' : 'Sign in'}
+            {loading ? "Signing in..." : "Sign in"}
           </button>
         </form>
 
         <p className="text-center text-sm text-gray-500">
-          Don't have an account?{' '}
+          Don't have an account?{" "}
           <Link to="/signup" className="text-indigo-400 hover:underline">
             Sign up
           </Link>
