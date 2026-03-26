@@ -75,7 +75,9 @@ src/
 ├── utils/
 │   ├── token.js           # localStorage helpers (msrag_token, msrag_refresh)
 │   ├── errorHandler.js    # handleError(err) — parses API error, shows toast, logs to console
-│   └── citations.js       # parseCitations(content, chunks) — parses [[Chunk N]] into segments
+│   ├── citations.js       # parseCitations(content, chunks) — parses [[Chunk N]] into segments
+│   ├── pdfExport.js       # jsPDF wrapper for PDF generation
+│   └── speechReader.js    # Web Speech API wrapper for Text-to-Speech
 │
 ├── router/
 │   ├── PrivateRoute.jsx   # Redirects unauthenticated users to /login
@@ -89,7 +91,9 @@ src/
 │       ├── ChatCard.jsx         # Chat card with mode badge, date, continue button
 │       ├── CreateChatModal.jsx  # New chat modal — title, mode, include_public
 │       ├── DocManagerModal.jsx  # Per-chat source toggle — enables/disables docs via inactive_docs
-│       ├── MessageBubble.jsx    # Renders user and assistant messages with Markdown + citations
+│       ├── MessageBubble.jsx    # Renders user (seeded avataaars) and assistant messages
+│       ├── MessageActions.jsx   # Feedback, Copy, PDF, TTS, Token usage toolbar
+│       ├── TokenBadge.jsx       # Token usage and breakdown tooltip
 │       ├── CitationChip.jsx     # [[Chunk N]] rendered as clickable [N] badge
 │       ├── ChunkModal.jsx       # Source detail modal — content, score, page, token count
 │       ├── ChatInput.jsx        # Auto-resize textarea with char counter and send button
@@ -149,13 +153,26 @@ src/
      - `event: done` → assembles final message, dispatches `finishStreaming`
 
 ### Source Citation
-- LLM responses contain `[[Chunk N]]` inline markers
-- `parseCitations(content, usedChunks)` splits the response into `{ type: 'text' }` and `{ type: 'citation' }` segments
-- Each citation segment renders as a `CitationChip` — a small `[N]` badge
-- Clicking a badge opens `ChunkModal` showing:
-  - Source URL / filename (with external link if web)
-  - Type, page, chunk index, token count, relevance score
-  - Full raw chunk content
+- LLM responses contain `[[Chunk N]]` inline markers.
+- `parseCitations(content, usedChunks)` splits the response into `{ type: 'text' }` and `{ type: 'citation' }` segments.
+- Markers are stripped from the main bubble text for readability.
+- Unique citations are rendered as `CitationChip` badges at the **bottom right** of the assistant's message.
+- Clicking a chip opens a `ChunkModal` with source metadata and raw content.
+
+### Message Actions & Tools
+Every assistant response includes a persistent action bar (visible on both desktop and mobile):
+- **Feedback**: Bogus like/dislike buttons (visual state only).
+- **Copy**: One-click copy of the cleaned markdown response to the clipboard.
+- **PDF Export**: Generates a high-fidelity, structured PDF of the response using **marked** (for Markdown -> HTML) and **html2pdf.js**. Preserves headers, bolding, lists, and layout as seen in the chat.
+- **Read Aloud**: Integrated Text-to-Speech (TTS) using the Web Speech API. Automatically strips markdown characters or citations before speaking. Priority is given to high-quality system voices (Google US English, etc.).
+- **Token Metrics**: Inline badge showing total tokens used. Hovering over the badge reveals a detailed breakdown:
+  - **Prompt Tokens**: Input context cost.
+  - **Completion Tokens**: Cost of the model's response.
+  - **Estimated Cost**: Calculated based on upstream inference rates (OpenRouter/OpenAI).
+
+### Branding & Avatars
+- **User Icons**: Consistently seeded random avatars from [Dicebear](https://api.dicebear.com/) based on the user's unique ID (`lorelei` set).
+- **App Styling**: Ant Design components are wrapped in a dark theme algorithm, ensuring visual consistency across modals, tooltips, and dropdowns.
 
 ### Document On/Off (per chat)
 - In `ChatPage` header: **Manage Sources** button opens `DocManagerModal`

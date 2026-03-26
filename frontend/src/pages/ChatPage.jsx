@@ -195,7 +195,7 @@ const ChatPage = () => {
         ) : (
           <>
             {messages.map((msg) => (
-              <MessageBubble key={msg._id} message={msg} />
+              <MessageBubble key={msg._id} message={msg} chatTitle={activeChat?.title} />
             ))}
             {/* Streaming message bubble — shows content as it arrives */}
             {isStreaming && streamingContent && (
@@ -206,6 +206,7 @@ const ChatPage = () => {
                   content: streamingContent,
                   used_chunks: [],
                 }}
+                chatTitle={activeChat?.title}
               />
             )}
             {/* Status / typing indicator while waiting */}
