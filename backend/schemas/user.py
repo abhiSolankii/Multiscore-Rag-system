@@ -4,7 +4,7 @@ from datetime import datetime
 
 class UserConfig(BaseModel):
     enable_streaming: bool = True
-    max_token_limit: Optional[int] = None
+    max_token_limit: Optional[int] = 1000 #It should never be zero because it will be considered as falsey and remaining tokens will become max_token_limit
     chat_char_limit: int = 1500
 
 class UserBase(BaseModel):

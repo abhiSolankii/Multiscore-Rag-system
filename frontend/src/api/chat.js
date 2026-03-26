@@ -1,6 +1,5 @@
 import client from './client';
 
-const STREAMING = import.meta.env.VITE_ENABLE_STREAMING === 'true';
 const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
 
 // ── Chat CRUD ─────────────────────────────────────────────────────────────────
@@ -53,4 +52,4 @@ export const sendMessageStream = (chatId, content, token) => {
   });
 };
 
-export { STREAMING };
+// export { STREAMING }; // Removed as it is now user-config based

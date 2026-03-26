@@ -1,4 +1,4 @@
-import { Switch, Tooltip } from "antd";
+import { Tooltip } from "antd";
 import { Info, Loader2, Save } from "lucide-react";
 import { useEffect, useState } from "react";
 import toast from "react-hot-toast";
@@ -108,7 +108,8 @@ const SettingsPage = () => {
             Preferences
           </h2>
           <div className="bg-gray-900 border border-gray-800 rounded-xl px-5">
-            <Field
+            <h1 className="p-4">Coming soon...</h1>
+            {/* <Field
               label="Enable Streaming"
               hint="Stream AI responses token by token in real time. Matches VITE_ENABLE_STREAMING env."
             >
@@ -116,22 +117,6 @@ const SettingsPage = () => {
                 checked={form.streaming}
                 onChange={(val) => setForm({ ...form, streaming: val })}
                 className={form.streaming ? "bg-indigo-600" : "bg-gray-600"}
-              />
-            </Field>
-            <Field
-              label="Max Token Limit"
-              hint="Cap the number of tokens the AI can generate per response. Leave blank for default."
-            >
-              <input
-                type="number"
-                min="100"
-                max="32000"
-                value={form.max_token_limit}
-                onChange={(e) =>
-                  setForm({ ...form, max_token_limit: e.target.value })
-                }
-                placeholder="Default"
-                className="w-28 px-3 py-1.5 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm text-right focus:outline-none focus:ring-2 focus:ring-indigo-500"
               />
             </Field>
             <Field
@@ -148,7 +133,7 @@ const SettingsPage = () => {
                 }
                 className="w-28 px-3 py-1.5 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm text-right focus:outline-none focus:ring-2 focus:ring-indigo-500"
               />
-            </Field>
+            </Field> */}
           </div>
         </div>
 

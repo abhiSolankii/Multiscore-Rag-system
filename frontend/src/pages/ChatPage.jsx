@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import { Database } from 'lucide-react';
-import { getMessages, sendMessage, sendMessageStream, getChat, STREAMING } from '../api/chat';
+import { getMessages, sendMessage, sendMessageStream, getChat } from '../api/chat';
 import { getToken } from '../utils/token';
 import { handleError } from '../utils/errorHandler';
 import {
@@ -33,6 +33,8 @@ const ChatPage = () => {
   const isStreaming = useSelector(selectIsStreaming);
   const statusStep = useSelector(selectStatusStep);
   const activeChat = useSelector(selectActiveChat);
+  const user = useSelector((state) => state.auth.user);
+  const enableStreaming = user?.config?.enable_streaming ?? false;
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [fetchingMsgs, setFetchingMsgs] = useState(false);
@@ -70,7 +72,7 @@ const ChatPage = () => {
     // Optimistically add user message
     dispatch(addMessage({ _id: `temp-${Date.now()}`, role: 'user', content, created_at: new Date().toISOString() }));
 
-    if (STREAMING) {
+    if (enableStreaming) {
       await handleStreamingSend(content);
     } else {
       await handleNonStreamingSend(content);
