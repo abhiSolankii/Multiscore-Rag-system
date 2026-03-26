@@ -1,5 +1,6 @@
 import { Tabs } from "antd";
 import {
+  AlertTriangle,
   FileText,
   GitBranch,
   Globe,
@@ -21,31 +22,66 @@ import {
 } from "../api/ingestion";
 import { handleError } from "../utils/errorHandler";
 
+// ── Status badge ──────────────────────────────────────────────────────────────
 const StatusBadge = ({ status }) => {
   const map = {
     pending: "bg-yellow-900/40 text-yellow-400 border-yellow-800/60",
     running: "bg-blue-900/40 text-blue-400 border-blue-800/60",
-    completed: "bg-green-900/40 text-green-400 border-green-800/60",
+    done: "bg-green-900/40 text-green-400 border-green-800/60",
     failed: "bg-red-900/40 text-red-400 border-red-800/60",
   };
   return (
-    <span
-      className={`px-2 py-0.5 text-xs rounded-full border capitalize ${map[status] || map.pending}`}
-    >
+    <span className={`px-2 py-0.5 text-xs rounded-full border capitalize ${map[status] || map.pending}`}>
       {status}
     </span>
   );
 };
 
+// ── Doc row ───────────────────────────────────────────────────────────────────
+const DocRow = ({ doc, onDelete }) => {
+  const icon =
+    doc.type === "web" ? (
+      <Globe size={14} className="text-blue-400 shrink-0" />
+    ) : doc.type === "github" ? (
+      <GitBranch size={14} className="text-gray-300 shrink-0" />
+    ) : (
+      <FileText size={14} className="text-orange-400 shrink-0" />
+    );
+
+  return (
+    <div className="flex items-center gap-3 bg-gray-900 border border-gray-800 rounded-lg px-4 py-3 group">
+      {icon}
+      <div className="flex-1 min-w-0">
+        <p className="text-sm text-white truncate">{doc.source}</p>
+        <p className="text-xs text-gray-500">
+          {doc.type} · {doc.chunks_ingested ?? "?"} chunks
+        </p>
+      </div>
+      <StatusBadge status={doc.status === "done" ? "done" : doc.status} />
+      <button
+        onClick={() => onDelete(doc.document_id, doc.source)}
+        className="shrink-0 text-gray-600 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-all ml-2"
+      >
+        <Trash2 size={14} />
+      </button>
+    </div>
+  );
+};
+
+// ── Main page ─────────────────────────────────────────────────────────────────
 const IngestPage = () => {
   const [docs, setDocs] = useState([]);
-  const [jobs, setJobs] = useState([]); // active polling jobs
   const [loadingDocs, setLoadingDocs] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [urlInput, setUrlInput] = useState("");
   const [repoInput, setRepoInput] = useState("");
   const [isPublic, setIsPublic] = useState(false);
 
+  // Jobs submitted this session — { task_id, source }
+  // Not persisted across reload intentionally (reload picks up via doc.status)
+  const [pendingJobs, setPendingJobs] = useState([]);
+
+  // ── Fetch documents ─────────────────────────────────────────────────────────
   const fetchDocs = useCallback(async () => {
     setLoadingDocs(true);
     try {
@@ -62,60 +98,49 @@ const IngestPage = () => {
     fetchDocs();
   }, [fetchDocs]);
 
-  // Keep a ref so the interval always sees the latest jobs without re-creating itself
-  const activeJobsRef = { current: jobs };
-  activeJobsRef.current = jobs;
-
+  // ── Polling — one interval per session, depends on pendingJobs ──────────────
+  // Using [pendingJobs] as dep: when a job completes, setPendingJobs triggers
+  // a re-render, cleanup clears the old interval, effect restarts with fresh list.
+  // Simple, correct, no stale closure issues.
   useEffect(() => {
-    if (jobs.length === 0) return;
+    if (pendingJobs.length === 0) return;
 
-    const interval = setInterval(async () => {
-      const current = activeJobsRef.current;
-      if (current.length === 0) {
-        clearInterval(interval);
-        return;
-      }
-
-      const updated = await Promise.all(
-        current.map(async (job) => {
+    const id = setInterval(async () => {
+      const results = await Promise.all(
+        pendingJobs.map(async (job) => {
           try {
             const res = await pollStatus(job.task_id);
-            return { ...job, status: res.status };
+            return { ...job, apiStatus: res.status };
           } catch {
-            return job;
+            return { ...job, apiStatus: "pending" };
           }
-        }),
+        })
       );
 
-      const done = updated.filter(
-        (j) => j.status === 'completed' || j.status === 'failed',
+      const done = results.filter(
+        (j) => j.apiStatus === "done" || j.apiStatus === "failed"
       );
-      const stillRunning = updated.filter(
-        (j) => j.status !== 'completed' && j.status !== 'failed',
+      const still = results.filter(
+        (j) => j.apiStatus !== "done" && j.apiStatus !== "failed"
       );
-
-      setJobs(stillRunning);
 
       if (done.length > 0) {
         done.forEach((j) => {
-          if (j.status === 'completed')
+          if (j.apiStatus === "completed")
             toast.success(`"${j.source}" ingested successfully.`);
           else toast.error(`"${j.source}" ingestion failed.`);
         });
+        setPendingJobs(still); // triggers re-render → effect cleanup + restart
         fetchDocs();
       }
+    }, 5000);
 
-      if (stillRunning.length === 0) {
-        clearInterval(interval);
-      }
-    }, 3000);
+    return () => clearInterval(id);
+  }, [pendingJobs, fetchDocs]);
 
-    return () => clearInterval(interval);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [jobs.length === 0 ? 0 : 1, fetchDocs]); // only re-run when jobs goes from empty→non-empty
-
-  const submitJob = (task_id, source) => {
-    setJobs((prev) => [...prev, { task_id, source, status: "pending" }]);
+  // ── Submit helpers ──────────────────────────────────────────────────────────
+  const addJob = (task_id, source) => {
+    setPendingJobs((prev) => [...prev, { task_id, source }]);
     toast.success("Ingestion started!");
   };
 
@@ -125,7 +150,7 @@ const IngestPage = () => {
     setSubmitting(true);
     try {
       const res = await ingestFile(file, isPublic);
-      submitJob(res.task_id, file.name);
+      addJob(res.task_id, file.name);
     } catch (err) {
       handleError(err);
     } finally {
@@ -139,7 +164,7 @@ const IngestPage = () => {
     setSubmitting(true);
     try {
       const res = await ingestUrl(urlInput.trim(), isPublic);
-      submitJob(res.task_id, urlInput.trim());
+      addJob(res.task_id, urlInput.trim());
       setUrlInput("");
     } catch (err) {
       handleError(err);
@@ -153,7 +178,7 @@ const IngestPage = () => {
     setSubmitting(true);
     try {
       const res = await ingestGithub(repoInput.trim(), isPublic);
-      submitJob(res.task_id, repoInput.trim());
+      addJob(res.task_id, repoInput.trim());
       setRepoInput("");
     } catch (err) {
       handleError(err);
@@ -172,8 +197,14 @@ const IngestPage = () => {
     }
   };
 
+  // ── Derived state ───────────────────────────────────────────────────────────
+  const publicDocs = docs.filter((d) => d.is_public);
+  const privateDocs = docs.filter((d) => !d.is_public);
+  const hasStaleDocsPending = docs.some((d) => d.status !== "done");
+
+  // ── Shared public toggle ────────────────────────────────────────────────────
   const publicSwitch = (
-    <label className="flex items-center gap-2 text-xs text-gray-400 mt-4">
+    <label className="flex items-center gap-2 text-xs text-gray-400 mt-4 cursor-pointer">
       <input
         type="checkbox"
         checked={isPublic}
@@ -286,6 +317,25 @@ const IngestPage = () => {
     },
   ];
 
+  // ── Doc section renderer ────────────────────────────────────────────────────
+  const DocSection = ({ title, list }) => (
+    <div>
+      <p className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-2">
+        {title} ({list.length})
+      </p>
+      {list.length === 0 ? (
+        <p className="text-xs text-gray-700 italic pl-1">None</p>
+      ) : (
+        <div className="space-y-2">
+          {list.map((doc) => (
+            <DocRow key={doc.document_id} doc={doc} onDelete={handleDelete} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+
+  // ── Render ──────────────────────────────────────────────────────────────────
   return (
     <div className="h-full flex flex-col overflow-hidden">
       <div className="border-b border-gray-800 px-6 py-4 shrink-0">
@@ -301,11 +351,11 @@ const IngestPage = () => {
           <Tabs items={tabItems} />
         </div>
 
-        {/* Active jobs */}
-        {jobs.length > 0 && (
+        {/* Active jobs this session */}
+        {pendingJobs.length > 0 && (
           <div className="space-y-2">
-            <h3 className="text-xs font-medium text-gray-400">Active Jobs</h3>
-            {jobs.map((job) => (
+            <p className="text-xs font-medium text-gray-400">Active Jobs</p>
+            {pendingJobs.map((job) => (
               <div
                 key={job.task_id}
                 className="flex items-center justify-between bg-gray-900 border border-gray-800 rounded-lg px-4 py-2.5"
@@ -313,7 +363,7 @@ const IngestPage = () => {
                 <p className="text-sm text-white truncate">{job.source}</p>
                 <div className="flex items-center gap-2 ml-3 shrink-0">
                   <Loader2 size={13} className="animate-spin text-indigo-400" />
-                  <StatusBadge status={job.status} />
+                  <StatusBadge status="pending" />
                 </div>
               </div>
             ))}
@@ -321,18 +371,29 @@ const IngestPage = () => {
         )}
 
         {/* Documents */}
-        <div>
-          <div className="flex items-center justify-between mb-3">
+        <div className="space-y-5">
+          {/* Header with stale-pending warning */}
+          <div className="flex items-center justify-between">
             <h3 className="text-xs font-medium text-gray-400">
               Documents ({docs.length})
             </h3>
-            <button
-              onClick={fetchDocs}
-              className="text-gray-500 hover:text-white transition-colors"
-            >
-              <RefreshCw size={13} />
-            </button>
+            <div className="flex items-center gap-2">
+              {hasStaleDocsPending && (
+                <span className="flex items-center gap-1 text-xs text-yellow-500">
+                  <AlertTriangle size={12} />
+                  Pending docs — refresh to update
+                </span>
+              )}
+              <button
+                onClick={fetchDocs}
+                disabled={loadingDocs}
+                className="text-gray-500 hover:text-white transition-colors disabled:opacity-40"
+              >
+                <RefreshCw size={13} className={loadingDocs ? "animate-spin" : ""} />
+              </button>
+            </div>
           </div>
+
           {loadingDocs ? (
             <div className="flex justify-center py-8">
               <Loader2 size={20} className="animate-spin text-indigo-400" />
@@ -343,34 +404,9 @@ const IngestPage = () => {
               No documents yet.
             </div>
           ) : (
-            <div className="space-y-2">
-              {docs.map((doc) => (
-                <div
-                  key={doc.document_id}
-                  className="flex items-center gap-3 bg-gray-900 border border-gray-800 rounded-lg px-4 py-3 group"
-                >
-                  {doc.type === "web" ? (
-                    <Globe size={14} className="text-blue-400 shrink-0" />
-                  ) : doc.type === "github" ? (
-                    <GitBranch size={14} className="text-gray-300 shrink-0" />
-                  ) : (
-                    <FileText size={14} className="text-orange-400 shrink-0" />
-                  )}
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm text-white truncate">{doc.source}</p>
-                    <p className="text-xs text-gray-500">
-                      {doc.type} · {doc.chunk_count ?? "?"} chunks{" "}
-                      {doc.is_public ? "· Public" : "· Private"}
-                    </p>
-                  </div>
-                  <button
-                    onClick={() => handleDelete(doc.document_id, doc.source)}
-                    className="shrink-0 text-gray-600 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-all"
-                  >
-                    <Trash2 size={14} />
-                  </button>
-                </div>
-              ))}
+            <div className="space-y-5">
+              <DocSection title="Private" list={privateDocs} />
+              <DocSection title="Public" list={publicDocs} />
             </div>
           )}
         </div>
