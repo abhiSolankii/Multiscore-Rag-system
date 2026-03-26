@@ -21,5 +21,8 @@ export const pollStatus = (taskId) =>
 export const listDocuments = (params = {}) =>
   client.get('/ingest/documents', { params }).then((r) => r.data);
 
+export const listPublicDocuments = (params = {}) =>
+  client.get('/ingest/documents/public', { params }).then((r) => r.data);
+
 export const deleteDocument = (documentId) =>
   client.delete(`/ingest/document/${documentId}`).then((r) => r.data);

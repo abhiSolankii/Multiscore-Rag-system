@@ -54,6 +54,23 @@ async def get_chats(
         
     return chats
 
+@router.get("/{chat_id}", response_model=ChatResponse)
+async def get_chat(
+    chat_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """Get a single chat by ID."""
+    db = get_database()
+    try:
+        chat_obj_id = ObjectId(chat_id)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid chat ID format")
+    chat = await db.chats.find_one({"_id": chat_obj_id, "user_id": current_user["_id"]})
+    if not chat:
+        raise HTTPException(status_code=404, detail="Chat not found")
+    chat["_id"] = str(chat["_id"])
+    return chat
+
 @router.patch("/{chat_id}", response_model=ChatResponse)
 async def update_chat(
     chat_id: str,

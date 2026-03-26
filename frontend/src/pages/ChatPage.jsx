@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import { Database } from 'lucide-react';
-import { getMessages, sendMessage, sendMessageStream, STREAMING } from '../api/chat';
+import { getMessages, sendMessage, sendMessageStream, getChat, STREAMING } from '../api/chat';
 import { getToken } from '../utils/token';
 import { handleError } from '../utils/errorHandler';
 import {
@@ -12,6 +12,7 @@ import {
   selectIsStreaming,
   selectStatusStep,
   selectActiveChat,
+  setActiveChat,
   startStreaming,
   appendStreamToken,
   setStatusStep,
@@ -39,20 +40,21 @@ const ChatPage = () => {
   const messagesEndRef = useRef(null);
   const streamingContentRef = useRef('');
 
-  // Fetch messages on mount / chatId change
+  // Fetch messages + chat data on mount / chatId change
   useEffect(() => {
-    const fetchMsgs = async () => {
+    const load = async () => {
       setFetchingMsgs(true);
       try {
-        const data = await getMessages(chatId);
-        dispatch(setMessages(data));
+        const [msgs, chat] = await Promise.all([getMessages(chatId), getChat(chatId)]);
+        dispatch(setMessages(msgs));
+        dispatch(setActiveChat(chat));
       } catch (err) {
         handleError(err);
       } finally {
         setFetchingMsgs(false);
       }
     };
-    fetchMsgs();
+    load();
   }, [chatId, dispatch]);
 
   // Scroll to bottom on new messages

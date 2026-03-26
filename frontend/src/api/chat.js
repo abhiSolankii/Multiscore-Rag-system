@@ -10,6 +10,9 @@ export const createChat = (title, config = {}) =>
 export const getChats = () =>
   client.get('/chats/list').then((r) => r.data);
 
+export const getChat = (chatId) =>
+  client.get(`/chats/${chatId}`).then((r) => r.data);
+
 export const updateChat = (chatId, data) =>
   client.patch(`/chats/${chatId}`, data).then((r) => r.data);
 
