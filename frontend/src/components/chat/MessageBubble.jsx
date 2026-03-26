@@ -5,8 +5,8 @@ import { useSelector } from "react-redux";
 import remarkGfm from "remark-gfm";
 import { parseCitations } from "../../utils/citations";
 import ChunkModal from "./ChunkModal";
-import CitationChip from "./CitationChip";
 import MessageActions from "./MessageActions";
+import SourcesDropdown from "./SourcesDropdown";
 
 const MarkdownContent = ({ content }) => (
   <ReactMarkdown
@@ -147,19 +147,10 @@ const MessageBubble = ({ message, chatTitle }) => {
               chatTitle={chatTitle}
             />
 
-            {/* Citations on bottom right */}
-            {citations.length > 0 && (
-              <div className="flex flex-wrap gap-1.5 px-1 py-1 sm:justify-end">
-                {citations.map((c) => (
-                  <CitationChip
-                    key={`citation-${c.index}`}
-                    index={c.index}
-                    chunk={c.chunk}
-                    onClick={() => setSelectedChunk(c.chunk)}
-                  />
-                ))}
-              </div>
-            )}
+            <SourcesDropdown
+              usedChunks={used_chunks}
+              onCitationClick={(chunk) => setSelectedChunk(chunk)}
+            />
           </div>
         </div>
       </div>

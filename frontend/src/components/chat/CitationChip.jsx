@@ -1,16 +1,16 @@
-import { Tooltip } from 'antd';
-import { FileText, Globe, GitBranch } from 'lucide-react';
+import { Tooltip } from "antd";
+import { FileText, Globe } from "lucide-react";
 
 const sourceIcon = (type) => {
-  if (type === 'web') return <Globe size={11} />;
-  if (type === 'github') return <Github size={11} />;
+  if (type === "web") return <Globe size={11} />;
+  if (type === "github") return <Github size={11} />;
   return <FileText size={11} />;
 };
 
 const CitationChip = ({ index, chunk, onClick }) => {
   const meta = chunk?.metadata || {};
   const tooltipText = meta.source
-    ? `${meta.source}${meta.page !== undefined ? ` · Page ${meta.page + 1}` : ''}`
+    ? `${meta.source}${meta.page !== undefined ? ` · Page ${meta.page + 1}` : ""}`
     : `Chunk ${index}`;
 
   return (
